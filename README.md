@@ -42,7 +42,7 @@ const wsKey = await Ed25519.get().PrivateKey.randomOrThrow()
 const wsAuth = await Jwt.signOrThrow(wsKey, relay)
 const wsUrl = `${relay}/?auth=${wsAuth}&projectId=${projectId}`
 const wsSocket = new WebSocket(wsUrl)
-await // TOOD: wait socket open
+// TOOD: wait socket open
 
 const irn = new IrnClient(wsSocket)
 const params = Wc.parseOrThrow(rawWcUrl)
