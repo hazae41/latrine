@@ -1,0 +1,83 @@
+{
+  "type": "module",
+  "name": "@hazae41/latrine",
+  "version": "0.0.0",
+  "description": "Secure and private reimplementation of the WalletConnect protocol",
+  "homepage": "https://github.com/hazae41/latrine",
+  "repository": "github:hazae41/latrine",
+  "author": "hazae41",
+  "license": "MIT",
+  "main": "./dist/cjs/index.cjs",
+  "module": "./dist/esm/index.mjs",
+  "types": "./dist/types/index.d.ts",
+  "sideEffects": false,
+  "files": [
+    "./dist/esm",
+    "./dist/cjs",
+    "./dist/types"
+  ],
+  "scripts": {
+    "build": "rimraf dist && rollup -c",
+    "test": "node ./dist/test/index.test.mjs",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@hazae41/base16": "^1.0.17",
+    "@hazae41/base58": "^1.0.5",
+    "@hazae41/base64": "^1.0.10",
+    "@hazae41/base64url": "^1.0.8",
+    "@hazae41/binary": "^1.3.4",
+    "@hazae41/bytes": "^1.2.9",
+    "@hazae41/chacha20poly1305": "^1.0.7",
+    "@hazae41/cursor": "^1.2.3",
+    "@hazae41/ed25519": "^2.1.10",
+    "@hazae41/future": "^1.0.3",
+    "@hazae41/jsonrpc": "^1.0.7",
+    "@hazae41/option": "^1.0.27",
+    "@hazae41/plume": "^2.4.2",
+    "@hazae41/result": "^1.2.3",
+    "@hazae41/x25519": "^2.1.4"
+  },
+  "devDependencies": {
+    "@hazae41/phobos": "^1.0.10",
+    "@hazae41/rimraf": "^1.0.1",
+    "@rollup/plugin-typescript": "^11.1.6",
+    "@types/node": "^20.11.19",
+    "rollup": "^4.12.0",
+    "rollup-plugin-dts": "^6.1.0",
+    "rollup-plugin-node-externals": "^7.0.1",
+    "tslib": "^2.6.3",
+    "typescript": "^5.3.3"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/esm/index.mjs",
+      "require": "./dist/cjs/index.cjs"
+    }
+  },
+  "keywords": [
+    "walletconnect",
+    "latrine",
+    "wc",
+    "jsonrpc",
+    "rpc",
+    "safe",
+    "ed25519",
+    "x25519",
+    "websocket",
+    "result",
+    "rust",
+    "data",
+    "error",
+    "catching",
+    "ok",
+    "err",
+    "unwrap",
+    "wrap",
+    "typescript",
+    "esmodules",
+    "tested",
+    "unit-tested"
+  ]
+}
