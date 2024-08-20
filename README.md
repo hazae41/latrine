@@ -28,3 +28,9 @@ See `./test/wallet`
 ### Webapp-side
 
 Unsupported yet
+
+## Demo
+
+### Wallet-side
+
+https://github.com/user-attachments/assets/6f1df8ce-4fbe-4d45-9b4c-029f9fc18610
