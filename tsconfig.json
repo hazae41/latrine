@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2023",
     "baseUrl": "./src",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
@@ -23,6 +23,6 @@
     }
   },
   "include": [
-    "./src/**/**.ts",
+    "./src/**/**.ts"
   ],
 }

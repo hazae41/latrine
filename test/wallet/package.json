@@ -1,0 +1,31 @@
+{
+  "name": "wallet",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@hazae41/disposable-stack-polyfill": "^1.0.1",
+    "@hazae41/latrine": "file:../..",
+    "@hazae41/symbol-dispose-polyfill": "^1.0.2",
+    "next": "14.2.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.4.1",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "eslint": "^8.57.0",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.41",
+    "tailwindcss": "^3.4.10",
+    "tslib": "^2.6.3",
+    "typescript": "^5.5.4",
+    "webpack": "^5.93.0"
+  }
+}
