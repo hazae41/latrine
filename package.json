@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@hazae41/latrine",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Secure and private reimplementation of the WalletConnect protocol",
   "homepage": "https://github.com/hazae41/latrine",
   "repository": "github:hazae41/latrine",
