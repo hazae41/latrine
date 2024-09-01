@@ -160,7 +160,7 @@ export class CryptoClient {
   }
 
   static createOrThrow(irn: IrnClientLike, topic: string, key: Uint8Array<32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
-    const cipher = ChaCha20Poly1305.get().Cipher.tryImport(key).unwrap()
+    const cipher = ChaCha20Poly1305.get().getOrThrow().Cipher.importOrThrow(key)
     const client = new CryptoClient(irn, topic, key, cipher, timeout, params)
 
     return client
@@ -203,7 +203,7 @@ export class CryptoClient {
   }
 
   async #onMessage(message: string): Promise<true> {
-    using slice = Base64.get().decodePaddedOrThrow(message)
+    using slice = Base64.get().getOrThrow().decodePaddedOrThrow(message)
 
     const envelope = Readable.readFromBytesOrThrow(Envelope, slice.bytes)
     const cipher = envelope.fragment.readIntoOrThrow(Ciphertext)
@@ -271,7 +271,7 @@ export class CryptoClient {
     const cipher = plain.encryptOrThrow(this.cipher, iv)
     const envelope = new EnvelopeTypeZero(cipher)
     const bytes = Writable.writeToBytesOrThrow(envelope)
-    const message = Base64.get().encodePaddedOrThrow(bytes)
+    const message = Base64.get().getOrThrow().encodePaddedOrThrow(bytes)
 
     return message
   }

@@ -11,9 +11,9 @@ export class Plaintext<T extends Writable> {
 
   encryptOrThrow(key: ChaCha20Poly1305.Cipher, iv: Uint8Array<12>): Ciphertext {
     const plain = Writable.writeToBytesOrThrow(this.fragment)
-    const cipher = key.tryEncrypt(plain, iv).unwrap().copyAndDispose()
+    using cipher = key.encryptOrThrow(plain, iv)
 
-    return new Ciphertext(iv, cipher)
+    return new Ciphertext(iv, cipher.bytes.slice())
   }
 
 }
@@ -26,9 +26,9 @@ export class Ciphertext {
   ) { }
 
   decryptOrThrow(key: ChaCha20Poly1305.Cipher): Plaintext<Opaque> {
-    const plain = key.tryDecrypt(this.inner, this.iv).unwrap().copyAndDispose()
+    using plain = key.decryptOrThrow(this.inner, this.iv)
 
-    return new Plaintext(new Opaque(plain))
+    return new Plaintext(new Opaque(plain.bytes.slice()))
   }
 
   sizeOrThrow() {

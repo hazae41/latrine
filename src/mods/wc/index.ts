@@ -107,14 +107,15 @@ export namespace Wc {
     if (version !== "2")
       throw new Error(`Invalid version`)
 
-    const relayProtocol = Option.unwrap(searchParams.get("relay-protocol"))
+    const relayProtocol = Option.wrap(searchParams.get("relay-protocol")).getOrThrow()
 
     if (relayProtocol !== "irn")
       throw new Error(`Invalid relay protocol`)
 
-    const symKeyHex = Option.unwrap(searchParams.get("symKey"))
-    const symKeyRaw = Base16.get().padStartAndDecodeOrThrow(symKeyHex).copyAndDispose()
-    const symKey = Bytes.castOrThrow(symKeyRaw, 32)
+    const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
+
+    using symKeyMem = Base16.get().getOrThrow().padStartAndDecodeOrThrow(symKeyHex)
+    const symKey = Bytes.castOrThrow(symKeyMem.bytes.slice(), 32)
 
     return { protocol, pairingTopic, version, relayProtocol, symKey }
   }
@@ -126,11 +127,11 @@ export namespace Wc {
 
     const relay = { protocol: "irn" }
 
-    const selfPrivate = await X25519.get().PrivateKey.tryRandom().then(r => r.unwrap())
-    const selfPublic = selfPrivate.tryGetPublicKey().unwrap()
+    using selfPrivate = await X25519.get().getOrThrow().PrivateKey.randomOrThrow()
+    using selfPublic = selfPrivate.getPublicKeyOrThrow()
 
-    using selfPublicMemory = await selfPublic.tryExport().then(r => r.unwrap())
-    const selfPublicHex = Base16.get().encodeOrThrow(selfPublicMemory)
+    using selfPublicMemory = await selfPublic.exportOrThrow()
+    const selfPublicHex = Base16.get().getOrThrow().encodeOrThrow(selfPublicMemory)
 
     await irn.subscribeOrThrow(pairingTopic, AbortSignal.timeout(timeout))
 
@@ -141,18 +142,18 @@ export namespace Wc {
       return new Some({ relay, responderPublicKey: selfPublicHex })
     }).inner
 
-    using peerPublicMemory = Base16.get().padStartAndDecodeOrThrow(proposal.params.proposer.publicKey)
-    const peerPublic = await X25519.get().PublicKey.tryImport(peerPublicMemory).then(r => r.unwrap())
+    using peerPublicMemory = Base16.get().getOrThrow().padStartAndDecodeOrThrow(proposal.params.proposer.publicKey)
+    using peerPublic = await X25519.get().getOrThrow().PublicKey.importOrThrow(peerPublicMemory)
 
-    const sharedRef = await selfPrivate.tryCompute(peerPublic).then(r => r.unwrap())
-    using sharedSlice = sharedRef.tryExport().unwrap()
+    using shared = await selfPrivate.computeOrThrow(peerPublic)
+    using sharedMemory = shared.exportOrThrow()
 
-    const hdfk_key = await crypto.subtle.importKey("raw", sharedSlice.bytes, "HKDF", false, ["deriveBits"])
+    const hdfk_key = await crypto.subtle.importKey("raw", sharedMemory.bytes, "HKDF", false, ["deriveBits"])
     const hkdf_params = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
     const sessionKey = new Uint8Array(await crypto.subtle.deriveBits(hkdf_params, hdfk_key, 8 * 32)) as Uint8Array<32>
     const sessionDigest = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKey))
-    const sessionTopic = Base16.get().encodeOrThrow(sessionDigest)
+    const sessionTopic = Base16.get().getOrThrow().encodeOrThrow(sessionDigest)
     const session = CryptoClient.createOrThrow(irn, sessionTopic, sessionKey, timeout)
 
     await irn.subscribeOrThrow(sessionTopic, AbortSignal.timeout(timeout))

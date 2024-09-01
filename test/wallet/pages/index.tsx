@@ -14,6 +14,9 @@ import { RpcRequestPreinit } from "@hazae41/jsonrpc"
 import { CryptoClient, IrnClient, Jwt, RpcReceipt, Wc, WcMetadata, WcSession, WcSessionRequestParams } from "@hazae41/latrine"
 import { None, Nullable, Some } from "@hazae41/option"
 import { X25519 } from "@hazae41/x25519"
+import { chacha20poly1305 } from "@noble/ciphers/chacha"
+import { ed25519, x25519 } from "@noble/curves/ed25519"
+import { base16, base58, base64, base64nopad, base64url, base64urlnopad } from "@scure/base"
 import { ChangeEvent, useCallback, useEffect, useState } from "react"
 
 export namespace Errors {
@@ -108,7 +111,7 @@ export namespace Blobs {
 
 export interface IrnClientAndAuthKey {
   readonly irn: IrnClient,
-  readonly authKey: Ed25519.PrivateKey
+  readonly authKey: Ed25519.SigningKey
 }
 
 export default function Home() {
@@ -122,24 +125,24 @@ export default function Home() {
   }, [])
 
   const initOrThrow = useCallback(async () => {
-    Base16.set(Base16.fromBufferOrScure())
-    Base64.set(Base64.fromBufferOrScure())
-    Base64Url.set(Base64Url.fromBufferOrScure())
-    Base58.set(Base58.fromScure())
+    Base16.set(Base16.fromScure({ base16 }))
+    Base64.set(Base64.fromScure({ base64, base64nopad }))
+    Base64Url.set(Base64Url.fromScure({ base64url, base64urlnopad }))
+    Base58.set(Base58.fromScure({ base58 }))
 
-    Ed25519.set(await Ed25519.fromSafeOrNoble())
-    X25519.set(await X25519.fromNativeOrNoble())
+    Ed25519.set(await Ed25519.fromNativeOrNoble({ ed25519 }))
+    X25519.set(await X25519.fromNativeOrNoble({ x25519 }))
 
-    ChaCha20Poly1305.set(ChaCha20Poly1305.fromNoble())
+    ChaCha20Poly1305.set(ChaCha20Poly1305.fromNoble({ chacha20poly1305 }))
   }, [])
 
   const [irnAndAuth, setIrnAndAuth] = useState<IrnClientAndAuthKey>()
 
   const openOrThrow = useCallback(async () => {
-    const authJwk = JsonLocalStorage.get<Ed25519.PrivateKeyJwk>("wc.jwk")
+    const authJwk = JsonLocalStorage.get<Ed25519.SigningKeyJwk>("wc.jwk")
 
     if (authJwk != null) {
-      const authKey = await Ed25519.get().PrivateKey.importJwkOrThrow(authJwk, true)
+      const authKey = await Ed25519.get().getOrThrow().SigningKey.importJwkOrThrow(authJwk, true)
       const authJwt = await Jwt.signOrThrow(authKey, Wc.RELAY)
 
       const socket = new WebSocket(`${Wc.RELAY}/?auth=${authJwt}&projectId=b580c84c2c57b6e4f78ab117951de721`)
@@ -150,8 +153,8 @@ export default function Home() {
       const pairTopic = JsonLocalStorage.get<string>("wc.tpc")!
       const pairKeyBase64 = JsonLocalStorage.get<string>("wc.key")!
 
-      const pairKeyRaw = Base64.get().decodePaddedOrThrow(pairKeyBase64).copyAndDispose()
-      const pairKey = Bytes.castOrThrow(pairKeyRaw, 32)
+      using pairKeyMem = Base64.get().getOrThrow().decodePaddedOrThrow(pairKeyBase64)
+      const pairKey = Bytes.castOrThrow(pairKeyMem.bytes.slice(), 32)
 
       const client = CryptoClient.createOrThrow(irn, pairTopic, pairKey, 5000)
       const metadata = JsonLocalStorage.get<WcMetadata>("wc.mtd")!
@@ -165,7 +168,7 @@ export default function Home() {
       const settlement = JsonLocalStorage.get<RpcReceipt>("wc.stl")
 
       if (settlement != null) {
-        const settled = await session.client.waitOrThrow<boolean>(settlement).then(r => r.unwrap())
+        const settled = await session.client.waitOrThrow<boolean>(settlement).then(r => r.getOrThrow())
 
         if (!settled) {
           JsonLocalStorage.set("wc.jwk", undefined)
@@ -249,7 +252,7 @@ export default function Home() {
       return
     }
 
-    const authKey = await Ed25519.get().PrivateKey.randomOrThrow()
+    const authKey = await Ed25519.get().getOrThrow().SigningKey.randomOrThrow()
     const authJwt = await Jwt.signOrThrow(authKey, Wc.RELAY)
 
     const socket = new WebSocket(`${Wc.RELAY}/?auth=${authJwt}&projectId=b580c84c2c57b6e4f78ab117951de721`)
@@ -285,7 +288,7 @@ export default function Home() {
     const pairTopic = session.client.topic
 
     const pairKey = session.client.key
-    const pairKeyBase64 = Base64.get().encodePaddedOrThrow(pairKey)
+    const pairKeyBase64 = Base64.get().getOrThrow().encodePaddedOrThrow(pairKey)
 
     JsonLocalStorage.set("wc.jwk", authJwk)
     JsonLocalStorage.set("wc.tpc", pairTopic)
@@ -309,7 +312,7 @@ export default function Home() {
       }
     }
 
-    const settled = await settlement.promise.then(r => r.unwrap())
+    const settled = await settlement.promise.then(r => r.getOrThrow())
 
     if (!settled) {
       JsonLocalStorage.set("wc.jwk", undefined)

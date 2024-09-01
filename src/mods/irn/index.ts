@@ -130,7 +130,7 @@ export class IrnClient implements IrnClientLike {
     const subscription = await SafeRpc.requestOrThrow<string>(this.socket, {
       method: "irn_subscribe",
       params: { topic }
-    }, signal).then(r => r.unwrap())
+    }, signal).then(r => r.getOrThrow())
 
     this.#topics.set(subscription, topic)
 
@@ -141,7 +141,7 @@ export class IrnClient implements IrnClientLike {
     const result = await SafeRpc.requestOrThrow<boolean>(this.socket, {
       method: "irn_publish",
       params: payload
-    }, signal).then(r => r.unwrap())
+    }, signal).then(r => r.getOrThrow())
 
     if (!result)
       throw new Error("Failed to publish")
