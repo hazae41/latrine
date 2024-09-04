@@ -3,7 +3,7 @@ import type { Uint8Array } from "@hazae41/bytes";
 import { Bytes } from "@hazae41/bytes";
 import { Future } from "@hazae41/future";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
-import { None, Option, Some } from "@hazae41/option";
+import { Option, Some } from "@hazae41/option";
 import { X25519 } from "@hazae41/x25519";
 import { CryptoClient, RpcReceiptAndPromise } from "mods/crypto/index.js";
 import { IrnClientLike } from "mods/irn/index.js";
@@ -137,7 +137,7 @@ export namespace Wc {
 
     const proposal = await pairing.events.wait("request", async (future: Future<RpcRequestPreinit<WcSessionProposeParams>>, request) => {
       if (request.method !== "wc_sessionPropose")
-        return new None()
+        return
       future.resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
       return new Some({ relay, responderPublicKey: selfPublicHex })
     }).inner

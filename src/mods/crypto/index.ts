@@ -4,7 +4,7 @@ import { Bytes, Uint8Array } from "@hazae41/bytes";
 import { ChaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { Future } from "@hazae41/future";
 import { RpcError, RpcId, RpcInvalidRequestError, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
-import { None, Some } from "@hazae41/option";
+import { Some } from "@hazae41/option";
 import { CloseEvents, ErrorEvents, SuperEventTarget } from "@hazae41/plume";
 import { Err, Ok } from "@hazae41/result";
 import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "libs/crypto/index.js";
@@ -178,26 +178,24 @@ export class CryptoClient {
   async #onIrnClose(reason?: unknown) {
     this.#stack.dispose()
     this.events.emit("close", [reason]).catch(console.error)
-    return new None()
   }
 
   async #onIrnError(reason?: unknown) {
     this.#stack.dispose()
     this.events.emit("error", [reason]).catch(console.error)
-    return new None()
   }
 
   async #onIrnRequest(request: RpcRequestPreinit<unknown>) {
     if (request.method === "irn_subscription")
       return await this.#onIrnSubscription(request)
-    return new None()
+    return
   }
 
   async #onIrnSubscription(request: RpcRequestPreinit<unknown>) {
     const { data } = (request as RpcRequestPreinit<IrnSubscriptionPayload>).params
 
     if (data.topic !== this.topic)
-      return new None()
+      return
 
     return new Some(await this.#onMessage(data.message))
   }
@@ -305,7 +303,7 @@ export class CryptoClient {
 
     const onResponse = (init: RpcResponseInit<any>) => {
       if (init.id !== receipt.id)
-        return new None()
+        return
 
       const response = RpcResponse.from<T>(init)
 
