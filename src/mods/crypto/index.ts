@@ -1,5 +1,6 @@
 import { Base64 } from "@hazae41/base64";
 import { Opaque, Readable, Writable } from "@hazae41/binary";
+import { Deferred, Stack } from "@hazae41/box";
 import { Bytes, Uint8Array } from "@hazae41/bytes";
 import { ChaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { Future } from "@hazae41/future";
@@ -143,7 +144,7 @@ export class CryptoClient {
     response: (response: RpcResponseInit<unknown>) => void
   }>()
 
-  #stack = new DisposableStack()
+  #stack = new Stack()
   #acks = new Set<number>()
 
   private constructor(
@@ -154,9 +155,9 @@ export class CryptoClient {
     readonly timeout: number,
     readonly params: CryptoClientParams
   ) {
-    this.#stack.defer(irn.events.on("close", this.#onIrnClose.bind(this), { passive: true }))
-    this.#stack.defer(irn.events.on("error", this.#onIrnError.bind(this), { passive: true }))
-    this.#stack.defer(irn.events.on("request", this.#onIrnRequest.bind(this), { passive: true }))
+    this.#stack.push(new Deferred(irn.events.on("close", this.#onIrnClose.bind(this), { passive: true })))
+    this.#stack.push(new Deferred(irn.events.on("error", this.#onIrnError.bind(this), { passive: true })))
+    this.#stack.push(new Deferred(irn.events.on("request", this.#onIrnRequest.bind(this), { passive: true })))
   }
 
   static createOrThrow(irn: IrnClientLike, topic: string, key: Uint8Array<32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
@@ -167,21 +168,25 @@ export class CryptoClient {
   }
 
   [Symbol.dispose]() {
+    using _ = this.#stack
+
     const { shouldCloseOnDispose = true } = this.params
 
     if (shouldCloseOnDispose)
       return void this.closeOrThrow().catch(console.error)
 
-    this.#stack.dispose()
+    return
   }
 
   async #onIrnClose(reason?: unknown) {
-    this.#stack.dispose()
+    using _ = this.#stack
+
     this.events.emit("close", [reason]).catch(console.error)
   }
 
   async #onIrnError(reason?: unknown) {
-    this.#stack.dispose()
+    using _ = this.#stack
+
     this.events.emit("error", [reason]).catch(console.error)
   }
 
@@ -296,7 +301,7 @@ export class CryptoClient {
   }
 
   async waitOrThrow<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
-    using stack = new DisposableStack()
+    using stack = new Stack()
 
     const future = new Future<RpcResponse<T>>()
     const signal = AbortSignal.timeout(receipt.end - Date.now())
@@ -312,12 +317,12 @@ export class CryptoClient {
       return new Some(undefined)
     }
 
-    stack.defer(this.events.on("response", onResponse, { passive: true }))
+    stack.push(new Deferred(this.events.on("response", onResponse, { passive: true })))
 
     const onAbort = () => future.reject(new Error("Aborted", { cause: signal.reason }))
 
     signal.addEventListener("abort", onAbort, { passive: true })
-    stack.defer(() => signal.removeEventListener("abort", onAbort))
+    stack.push(new Deferred(() => signal.removeEventListener("abort", onAbort)))
 
     return await future.promise
   }

@@ -1,3 +1,4 @@
+import { Deferred, Stack } from "@hazae41/box"
 import { RpcError, RpcInvalidRequestError, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc"
 import { CloseEvents, ErrorEvents, SuperEventTarget } from "@hazae41/plume"
 import { Err, Ok } from "@hazae41/result"
@@ -49,7 +50,7 @@ export class IrnClient implements IrnClientLike {
     request: (request: RpcRequestPreinit<unknown>) => unknown
   }>()
 
-  readonly #stack = new DisposableStack()
+  readonly #stack = new Stack()
   readonly #topics = new Map<string, string>()
 
   #closed?: { reason?: unknown }
@@ -60,24 +61,26 @@ export class IrnClient implements IrnClientLike {
   ) {
     const onSocketMessage = this.#onSocketMessage.bind(this)
     socket.addEventListener("message", onSocketMessage, { passive: true })
-    this.#stack.defer(() => socket.removeEventListener("message", onSocketMessage))
+    this.#stack.push(new Deferred(() => socket.removeEventListener("message", onSocketMessage)))
 
     const onSocketClose = this.#onSocketClose.bind(this)
     socket.addEventListener("close", onSocketClose, { passive: true })
-    this.#stack.defer(() => socket.removeEventListener("close", onSocketClose))
+    this.#stack.push(new Deferred(() => socket.removeEventListener("close", onSocketClose)))
 
     const onSocketError = this.#onSocketError.bind(this)
     socket.addEventListener("error", onSocketError, { passive: true })
-    this.#stack.defer(() => socket.removeEventListener("error", onSocketError))
+    this.#stack.push(new Deferred(() => socket.removeEventListener("error", onSocketError)))
   }
 
   [Symbol.dispose]() {
+    using _ = this.#stack
+
     const { shouldCloseOnDispose = true } = this.params
 
     if (shouldCloseOnDispose)
       return void this.closeOrThrow()
 
-    this.#stack.dispose()
+    return
   }
 
   get closed() {
@@ -85,14 +88,18 @@ export class IrnClient implements IrnClientLike {
   }
 
   #onSocketClose(event: CloseEvent) {
+    using _ = this.#stack
+
     this.#closed = { reason: event.reason }
-    this.#stack.dispose()
+
     this.events.emit("close", [event.reason]).catch(console.error)
   }
 
   #onSocketError(event: Event) {
+    using _ = this.#stack
+
     this.#closed = {}
-    this.#stack.dispose()
+
     this.events.emit("error", [undefined]).catch(console.error)
   }
 
@@ -150,9 +157,12 @@ export class IrnClient implements IrnClientLike {
   }
 
   closeOrThrow(reason?: unknown) {
+    using _ = this.#stack
+
     this.#closed = { reason }
-    this.#stack.dispose()
+
     this.events.emit("close", [reason]).catch(console.error)
+
     this.socket.close()
   }
 
