@@ -1,3 +1,4 @@
+import { Deferred, Stack } from "@hazae41/box";
 import { Future } from "@hazae41/future";
 import { RpcRequest, RpcRequestPreinit, RpcResponse } from "@hazae41/jsonrpc";
 import { SafeJson } from "libs/json/index.js";
@@ -13,7 +14,7 @@ export namespace SafeRpc {
   }
 
   export async function requestOrThrow<T>(socket: WebSocket, init: RpcRequestPreinit<unknown>, signal = new AbortController().signal) {
-    using stack = new DisposableStack()
+    using stack = new Stack()
 
     const future = new Future<RpcResponse<T>>()
 
@@ -33,21 +34,21 @@ export namespace SafeRpc {
     }
 
     socket.addEventListener("message", onMessage, { passive: true })
-    stack.defer(() => socket.removeEventListener("message", onMessage))
+    stack.push(new Deferred(() => socket.removeEventListener("message", onMessage)))
 
     const onError = (cause: unknown) => future.reject(new Error("Errored", { cause }))
     const onClose = (cause: unknown) => future.reject(new Error("Closed", { cause }))
 
     socket.addEventListener("close", onClose, { passive: true })
-    stack.defer(() => socket.removeEventListener("close", onClose))
+    stack.push(new Deferred(() => socket.removeEventListener("close", onClose)))
 
     socket.addEventListener("error", onError, { passive: true })
-    stack.defer(() => socket.removeEventListener("error", onError))
+    stack.push(new Deferred(() => socket.removeEventListener("error", onError)))
 
     const onAbort = () => future.reject(new Error("Aborted", { cause: signal.reason }))
 
     signal.addEventListener("abort", onAbort, { passive: true })
-    stack.defer(() => signal.removeEventListener("abort", onAbort))
+    stack.push(new Deferred(() => signal.removeEventListener("abort", onAbort)))
 
     socket.send(SafeJson.stringify(request))
 
