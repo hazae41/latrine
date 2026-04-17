@@ -1,10 +1,8 @@
-import { Deferred, Stack } from "@hazae41/box"
+import { SafeJson } from "@/libs/json/mod.ts"
+import { Awaitable } from "@/libs/promises/mod.ts"
+import { SafeRpc } from "@/libs/rpc/mod.ts"
 import { RpcError, RpcInvalidRequestError, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc"
-import { CloseEvents, ErrorEvents, SuperEventTarget } from "@hazae41/plume"
-import { Err, Ok } from "@hazae41/result"
-import { SafeJson } from "libs/json/index.js"
-import { Awaitable } from "libs/promises/index.js"
-import { SafeRpc } from "libs/rpc/index.js"
+import { Err, Ok } from "@hazae41/result-and-option"
 
 export interface IrnPublishPayload {
   readonly topic: string
@@ -50,7 +48,7 @@ export class IrnClient implements IrnClientLike {
     request: (request: RpcRequestPreinit<unknown>) => unknown
   }>()
 
-  readonly #stack = new Stack()
+  readonly #stack = new DisposableStack()
   readonly #topics = new Map<string, string>()
 
   #closed?: { reason?: unknown }
@@ -61,15 +59,15 @@ export class IrnClient implements IrnClientLike {
   ) {
     const onSocketMessage = this.#onSocketMessage.bind(this)
     socket.addEventListener("message", onSocketMessage, { passive: true })
-    this.#stack.push(new Deferred(() => socket.removeEventListener("message", onSocketMessage)))
+    this.#stack.defer(() => socket.removeEventListener("message", onSocketMessage))
 
     const onSocketClose = this.#onSocketClose.bind(this)
     socket.addEventListener("close", onSocketClose, { passive: true })
-    this.#stack.push(new Deferred(() => socket.removeEventListener("close", onSocketClose)))
+    this.#stack.defer(() => socket.removeEventListener("close", onSocketClose))
 
     const onSocketError = this.#onSocketError.bind(this)
     socket.addEventListener("error", onSocketError, { passive: true })
-    this.#stack.push(new Deferred(() => socket.removeEventListener("error", onSocketError)))
+    this.#stack.defer(() => socket.removeEventListener("error", onSocketError))
   }
 
   [Symbol.dispose]() {

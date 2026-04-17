@@ -1,17 +1,12 @@
-import { Base64 } from "@hazae41/base64";
-import { Opaque, Readable, Writable } from "@hazae41/binary";
-import { Deferred, Stack } from "@hazae41/box";
-import { Bytes, Uint8Array } from "@hazae41/bytes";
-import { ChaCha20Poly1305 } from "@hazae41/chacha20poly1305";
-import { Future } from "@hazae41/future";
+import type { Uint8Array } from "@/libs/bytes/mod.ts";
+import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "@/libs/crypto/mod.ts";
+import { SafeJson } from "@/libs/json/mod.ts";
+import { SafeRpc } from "@/libs/rpc/mod.ts";
+import { IrnClientLike, IrnSubscriptionPayload } from "@/mods/irn/mod.ts";
+import { Readable, Unknown, Writable } from "@hazae41/binary";
+import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { RpcError, RpcId, RpcInvalidRequestError, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
-import { Some } from "@hazae41/option";
-import { CloseEvents, ErrorEvents, SuperEventTarget } from "@hazae41/plume";
-import { Err, Ok } from "@hazae41/result";
-import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "libs/crypto/index.js";
-import { SafeJson } from "libs/json/index.js";
-import { SafeRpc } from "libs/rpc/index.js";
-import { IrnClientLike, IrnSubscriptionPayload } from "mods/irn/index.js";
+import { Err, Ok, Some } from "@hazae41/result-and-option";
 
 export interface RpcOpts {
   readonly prompt: boolean
@@ -144,24 +139,24 @@ export class CryptoClient {
     response: (response: RpcResponseInit<unknown>) => void
   }>()
 
-  #stack = new Stack()
+  #stack = new DisposableStack()
   #acks = new Set<number>()
 
   private constructor(
     readonly irn: IrnClientLike,
     readonly topic: string,
-    readonly key: Uint8Array<32>,
-    readonly cipher: ChaCha20Poly1305.Cipher,
+    readonly key: Uint8Array<ArrayBuffer, 32>,
+    readonly cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher,
     readonly timeout: number,
     readonly params: CryptoClientParams
   ) {
-    this.#stack.push(new Deferred(irn.events.on("close", this.#onIrnClose.bind(this), { passive: true })))
-    this.#stack.push(new Deferred(irn.events.on("error", this.#onIrnError.bind(this), { passive: true })))
-    this.#stack.push(new Deferred(irn.events.on("request", this.#onIrnRequest.bind(this), { passive: true })))
+    this.#stack.defer(irn.events.on("close", this.#onIrnClose.bind(this), { passive: true }))
+    this.#stack.defer(irn.events.on("error", this.#onIrnError.bind(this), { passive: true }))
+    this.#stack.defer(irn.events.on("request", this.#onIrnRequest.bind(this), { passive: true }))
   }
 
-  static createOrThrow(irn: IrnClientLike, topic: string, key: Uint8Array<32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
-    const cipher = ChaCha20Poly1305.get().getOrThrow().Cipher.importOrThrow(key)
+  static createOrThrow(irn: IrnClientLike, topic: string, key: Uint8Array<ArrayBuffer, 32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
+    const cipher = chaCha20Poly1305.get().getOrThrow().ChaCha20Poly1305Cipher.importOrThrow(key)
     const client = new CryptoClient(irn, topic, key, cipher, timeout, params)
 
     return client
@@ -206,12 +201,12 @@ export class CryptoClient {
   }
 
   async #onMessage(message: string): Promise<true> {
-    using slice = Base64.get().getOrThrow().decodePaddedOrThrow(message)
+    const slice = Uint8Array.fromBase64(message)
 
-    const envelope = Readable.readFromBytesOrThrow(Envelope, slice.bytes)
+    const envelope = Readable.readFromBytesOrThrow(Envelope, slice)
     const cipher = envelope.fragment.readIntoOrThrow(Ciphertext)
     const plain = cipher.decryptOrThrow(this.cipher)
-    const plaintext = Bytes.toUtf8(plain.fragment.bytes)
+    const plaintext = new TextDecoder().decode(plain.fragment.bytes)
 
     const data = SafeJson.parse(plaintext) as RpcRequestInit<unknown> | RpcResponseInit<unknown>
 
@@ -269,12 +264,12 @@ export class CryptoClient {
 
   #encryptOrThrow(data: unknown): string {
     const plaintext = SafeJson.stringify(data)
-    const plain = new Plaintext(new Opaque(Bytes.fromUtf8(plaintext)))
-    const iv = Bytes.random(12) // TODO maybe use a counter
+    const plain = new Plaintext(new Unknown(new TextEncoder().encode(plaintext)))
+    const iv = crypto.getRandomValues(new Uint8Array(12))
     const cipher = plain.encryptOrThrow(this.cipher, iv)
     const envelope = new EnvelopeTypeZero(cipher)
     const bytes = Writable.writeToBytesOrThrow(envelope)
-    const message = Base64.get().getOrThrow().encodePaddedOrThrow(bytes)
+    const message = bytes.toBase64({ alphabet: "base64", omitPadding: false })
 
     return message
   }
@@ -301,9 +296,9 @@ export class CryptoClient {
   }
 
   async waitOrThrow<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
-    using stack = new Stack()
+    using stack = new DisposableStack()
 
-    const future = new Future<RpcResponse<T>>()
+    const future = Promise.withResolvers<RpcResponse<T>>()
     const signal = AbortSignal.timeout(receipt.end - Date.now())
 
     const onResponse = (init: RpcResponseInit<any>) => {
@@ -317,12 +312,12 @@ export class CryptoClient {
       return new Some(undefined)
     }
 
-    stack.push(new Deferred(this.events.on("response", onResponse, { passive: true })))
+    stack.defer(this.events.on("response", onResponse, { passive: true }))
 
     const onAbort = () => future.reject(new Error("Aborted", { cause: signal.reason }))
 
     signal.addEventListener("abort", onAbort, { passive: true })
-    stack.push(new Deferred(() => signal.removeEventListener("abort", onAbort)))
+    stack.defer(() => signal.removeEventListener("abort", onAbort))
 
     return await future.promise
   }

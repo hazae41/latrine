@@ -6,7 +6,7 @@ Secure and private reimplementation of the WalletConnect protocol
 npm i @hazae41/latrine
 ```
 
-[**Node Package 📦**](https://www.npmjs.com/package/@hazae41/latrine)
+[**NPM 📦**](https://www.npmjs.com/package/@hazae41/latrine)
 
 ## Features
 
