@@ -9,8 +9,6 @@ await chaCha20Poly1305Wasm.load()
 
 chaCha20Poly1305.set(chaCha20Poly1305.fromWasm(chaCha20Poly1305Wasm))
 
-const jwk = crypto.getRandomValues(new Uint8Array(32))
-
 const address = "0xD231b3331C831Fc99152b5BEE366335B9C6c71e7"
 const chains = [1]
 
@@ -51,6 +49,7 @@ async function open(url: string, token: string, projectId: string) {
 async function pair(url: string) {
   const params = Wc.parseOrThrow(url)
 
+  const jwk = crypto.getRandomValues(new Uint8Array(32))
   const jwt = await Jwt.signOrThrow(jwk, Wc.RELAY)
   const irn = await open(Wc.RELAY, jwt, "b580c84c2c57b6e4f78ab117951de721")
 
@@ -64,20 +63,23 @@ async function pair(url: string) {
 }
 
 async function resume(stale: WcSession) {
+  const jwk = crypto.getRandomValues(new Uint8Array(32))
   const jwt = await Jwt.signOrThrow(jwk, Wc.RELAY)
   const irn = await open(Wc.RELAY, jwt, "b580c84c2c57b6e4f78ab117951de721")
 
-  const crypto = new CryptoClient(irn, stale.client.topic, stale.client.key)
+  const client = new CryptoClient(irn, stale.client.topic, stale.client.key)
 
   await irn.subscribe(stale.client.topic)
 
-  return new WcSession(crypto, stale.metadata)
+  return new WcSession(client, stale.metadata)
 }
+
+console.log("Pairing...")
 
 /**
  * Start by pairing
  */
-const session = await pair("wc:813ec77e84d8b8f36111f13ba12e4c5d8fd89cbaafb75df9b58c706448cbf46b@2?relay-protocol=irn&symKey=f02bc3362da1b0f488dc343842b63e7802fb123e110994dfd85aabe884487bd8&expiryTimestamp=1776529374")
+const session = await pair("wc:9a3fba7a17f1ee820304c4e96ce30aa0398c5e0a0ef6070e578430b7b6edd6ce@2?relay-protocol=irn&symKey=04b4c54ccf543914bc06ad4808e27c2c7b7a6fb4ec5eb56c6408b93f176c0733&expiryTimestamp=1776529608")
 
 console.log("Session paired")
 
