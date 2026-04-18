@@ -84,17 +84,18 @@ export interface WcPairParams {
   readonly symKey: Uint8Array<ArrayBuffer, 32>
 }
 
-export interface WcSessionParams {
-  readonly protocol: "wc:"
-  readonly version: "2"
-  readonly sessionTopic: string
-  readonly relayProtocol: "irn"
-  readonly symKey: Uint8Array<ArrayBuffer, 32>
-}
+export namespace WcPairParams {
 
-export namespace Wc {
+  export function stringify(params: WcPairParams): string {
+    const { protocol, version, pairingTopic, relayProtocol, symKey } = params
 
-  export const RELAY = "wss://relay.walletconnect.org"
+    const url = new URL(`${protocol}${pairingTopic}@${version}`)
+
+    url.searchParams.set("relay-protocol", relayProtocol)
+    url.searchParams.set("symKey", symKey.toHex())
+
+    return url.toString()
+  }
 
   export function parse(rawUrl: string | URL): WcPairParams {
     const { protocol, pathname, searchParams } = new URL(rawUrl)
@@ -117,6 +118,57 @@ export namespace Wc {
 
     return { protocol, pairingTopic, version, relayProtocol, symKey: symKeyRaw }
   }
+
+}
+
+export interface WcSessionParams {
+  readonly protocol: "wc:"
+  readonly version: "2"
+  readonly sessionTopic: string
+  readonly relayProtocol: "irn"
+  readonly symKey: Uint8Array<ArrayBuffer, 32>
+}
+
+export namespace WcSessionParams {
+
+  export function stringify(params: WcSessionParams): string {
+    const { protocol, version, sessionTopic, relayProtocol, symKey } = params
+
+    const url = new URL(`${protocol}${sessionTopic}@${version}`)
+
+    url.searchParams.set("relay-protocol", relayProtocol)
+    url.searchParams.set("symKey", symKey.toHex())
+
+    return url.toString()
+  }
+
+  export function parse(rawUrl: string | URL): WcSessionParams {
+    const { protocol, pathname, searchParams } = new URL(rawUrl)
+
+    if (protocol !== "wc:")
+      throw new Error(`Invalid protocol`)
+
+    const [sessionTopic, version] = pathname.split("@")
+
+    if (version !== "2")
+      throw new Error(`Invalid version`)
+
+    const relayProtocol = Option.wrap(searchParams.get("relay-protocol")).getOrThrow()
+
+    if (relayProtocol !== "irn")
+      throw new Error(`Invalid relay protocol`)
+
+    const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
+    const symKeyRaw = Uint8Array.fromHex(symKeyHex) as Uint8Array<ArrayBuffer, 32>
+
+    return { protocol, sessionTopic, version, relayProtocol, symKey: symKeyRaw }
+  }
+
+}
+
+export namespace Wc {
+
+  export const RELAY = "wss://relay.walletconnect.org"
 
   export async function pair(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, namespaces: unknown, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
     const relay = { protocol: "irn" }

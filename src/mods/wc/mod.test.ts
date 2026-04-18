@@ -1,7 +1,7 @@
 import { IrnClient } from "@/mod.ts";
 import { Jwt } from "@/mods/jwt/mod.ts";
 import { CryptoClient } from "@/mods/mod.ts";
-import { Wc, WcSession } from "@/mods/wc/mod.ts";
+import { Wc, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
 
@@ -47,7 +47,7 @@ async function open(url: string, token: string, projectId: string) {
 }
 
 async function pair(url: string) {
-  const params = Wc.parse(url)
+  const params = WcPairParams.parse(url)
 
   const jwk = crypto.getRandomValues(new Uint8Array(32))
   const jwt = await Jwt.signOrThrow(jwk, Wc.RELAY)
