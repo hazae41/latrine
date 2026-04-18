@@ -96,7 +96,7 @@ export namespace Wc {
 
   export const RELAY = "wss://relay.walletconnect.org"
 
-  export function parseOrThrow(rawUrl: string | URL): WcPairParams {
+  export function parse(rawUrl: string | URL): WcPairParams {
     const { protocol, pathname, searchParams } = new URL(rawUrl)
 
     if (protocol !== "wc:")
@@ -118,17 +118,17 @@ export namespace Wc {
     return { protocol, pairingTopic, version, relayProtocol, symKey: symKeyRaw }
   }
 
-  export async function pairOrThrow(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, namespaces: unknown, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
+  export async function pair(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, namespaces: unknown, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
     const relay = { protocol: "irn" }
 
     const pairing = new CryptoClient(irn, params.pairingTopic, params.symKey)
+
+    await irn.subscribe(params.pairingTopic, signal)
 
     const selfKeyPair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
     const selfPubKey = selfKeyPair.publicKey
     const selfPubHex = new Uint8Array(await crypto.subtle.exportKey("raw", selfPubKey)).toHex()
-
-    await irn.subscribe(params.pairingTopic, signal)
 
     const preproposal = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
 
@@ -163,7 +163,7 @@ export namespace Wc {
     const { proposer, requiredNamespaces, optionalNamespaces } = proposal.params
 
     const controller = { publicKey: selfPubHex, metadata }
-    const expiry = Math.floor((Date.now() + (7 * 24 * 60 * 60 * 1000)) / 1000)
+    const expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60)
 
     const params2: WcSessionSettleParams = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: params.pairingTopic, controller, expiry }
 

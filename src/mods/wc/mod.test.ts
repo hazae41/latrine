@@ -47,13 +47,13 @@ async function open(url: string, token: string, projectId: string) {
 }
 
 async function pair(url: string) {
-  const params = Wc.parseOrThrow(url)
+  const params = Wc.parse(url)
 
   const jwk = crypto.getRandomValues(new Uint8Array(32))
   const jwt = await Jwt.signOrThrow(jwk, Wc.RELAY)
   const irn = await open(Wc.RELAY, jwt, "b580c84c2c57b6e4f78ab117951de721")
 
-  const [session, settlement] = await Wc.pairOrThrow(irn, params, metadata, namespaces)
+  const [session, settlement] = await Wc.pair(irn, params, metadata, namespaces)
 
   console.log(session.metadata)
 
@@ -79,7 +79,7 @@ console.log("Pairing...")
 /**
  * Start by pairing
  */
-const session = await pair("wc:9a3fba7a17f1ee820304c4e96ce30aa0398c5e0a0ef6070e578430b7b6edd6ce@2?relay-protocol=irn&symKey=04b4c54ccf543914bc06ad4808e27c2c7b7a6fb4ec5eb56c6408b93f176c0733&expiryTimestamp=1776529608")
+const session = await pair("wc:40a51134e3290d73811e4904e2224a51e72431917e31d8ea15f0f52a3b374e55@2?relay-protocol=irn&symKey=accdc38e1523de72a43786e8d50670aafd2ca603b058b797570cd93d8d63ce25&expiryTimestamp=1776530253")
 
 console.log("Session paired")
 
