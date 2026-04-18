@@ -148,34 +148,29 @@ export class CryptoClient extends EventTarget {
 
   readonly #aborter = new AbortController()
 
+  #cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher
+
   #acks = new Set<number>()
 
   #closed?: { reason?: unknown }
 
-  private constructor(
+  constructor(
     readonly irn: IrnClient,
     readonly topic: string,
     readonly key: Uint8Array<ArrayBuffer, 32>,
-    readonly cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher,
-    readonly timeout: number,
-    readonly params: CryptoClientParams
+    readonly params: CryptoClientParams = {}
   ) {
     super()
+
+    const { Memory, ChaCha20Poly1305Cipher } = chaCha20Poly1305.get().getOrThrow()
+
+    this.#cipher = ChaCha20Poly1305Cipher.importOrThrow(Memory.fromOrThrow(key))
 
     const { signal } = this.#aborter
 
     irn.addEventListener("close", this.#onIrnClose.bind(this), { signal })
     irn.addEventListener("error", this.#onIrnError.bind(this), { signal })
     irn.addEventListener("request", this.#onIrnRequest.bind(this), { signal })
-  }
-
-  static createOrThrow(irn: IrnClient, topic: string, key: Uint8Array<ArrayBuffer, 32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
-    const { Memory, ChaCha20Poly1305Cipher } = chaCha20Poly1305.get().getOrThrow()
-
-    const memory = Memory.fromOrThrow(key)
-    const cipher = ChaCha20Poly1305Cipher.importOrThrow(memory)
-
-    return new CryptoClient(irn, topic, key, cipher, timeout, params)
   }
 
   [Symbol.dispose]() {
@@ -249,7 +244,7 @@ export class CryptoClient extends EventTarget {
     const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
 
     const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
-    const decrypted = encrypted.decryptOrThrow(this.cipher)
+    const decrypted = encrypted.decryptOrThrow(this.#cipher)
 
     const json = new TextDecoder().decode(decrypted.fragment.bytes)
     const data = SafeJson.parse(json) as RpcMessageInit
@@ -278,9 +273,8 @@ export class CryptoClient extends EventTarget {
     const message = this.#encryptOrThrow(response)
 
     const payload = { topic, message, prompt, tag, ttl }
-    const signal = AbortSignal.timeout(this.timeout)
 
-    await this.irn.publish(payload, signal)
+    await this.irn.publish(payload)
   }
 
   async #respond(request: RpcRequestInit<unknown>) {
@@ -314,7 +308,7 @@ export class CryptoClient extends EventTarget {
     const nonce = crypto.getRandomValues(new Uint8Array(12))
 
     const decrypted = new Plaintext(new Unknown(new TextEncoder().encode(json)))
-    const encrypted = decrypted.encryptOrThrow(this.cipher, nonce)
+    const encrypted = decrypted.encryptOrThrow(this.#cipher, nonce)
 
     const wrapper = new EnvelopeTypeZero(encrypted)
     const written = Writable.writeToBytesOrThrow(wrapper)
@@ -338,9 +332,8 @@ export class CryptoClient extends EventTarget {
     const promise = this.waitOrThrow<T>(receipt)
 
     const payload = { topic, message, prompt, tag, ttl }
-    const signal = AbortSignal.timeout(this.timeout)
 
-    await this.irn.publish(payload, signal)
+    await this.irn.publish(payload)
 
     return { receipt, promise }
   }

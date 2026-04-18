@@ -71,7 +71,7 @@ export class WcSession {
 
     await this.client.requestOrThrow({ method: "wc_sessionDelete", params })
 
-    this.client.irn.close(reason)
+    this.client.close(reason)
   }
 
 }
@@ -118,22 +118,17 @@ export namespace Wc {
     return { protocol, pairingTopic, version, relayProtocol, symKey: symKeyRaw }
   }
 
-  export async function pairOrThrow(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, address: string, chains: number[], timeout: number): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
-    const { pairingTopic, symKey } = params
-
-    const pairing = CryptoClient.createOrThrow(irn, pairingTopic, symKey, timeout)
-
+  export async function pairOrThrow(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, namespaces: unknown, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
     const relay = { protocol: "irn" }
 
-    const selfPairRef = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
+    const pairing = new CryptoClient(irn, params.pairingTopic, params.symKey)
 
-    const selfPrivateRef = selfPairRef.privateKey
-    const selfPublicRef = selfPairRef.publicKey
+    const selfKeyPair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
-    const selfPublicRaw = new Uint8Array(await crypto.subtle.exportKey("raw", selfPublicRef))
-    const selfPublicHex = selfPublicRaw.toHex()
+    const selfPubKey = selfKeyPair.publicKey
+    const selfPubHex = new Uint8Array(await crypto.subtle.exportKey("raw", selfPubKey)).toHex()
 
-    await irn.subscribe(pairingTopic, AbortSignal.timeout(timeout))
+    await irn.subscribe(params.pairingTopic, signal)
 
     const preproposal = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
 
@@ -145,45 +140,36 @@ export namespace Wc {
 
       preproposal.resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
 
-      event.respondWith({ relay, responderPublicKey: selfPublicHex })
+      event.respondWith({ relay, responderPublicKey: selfPubHex })
     }, { once: true })
 
     const proposal = await preproposal.promise
 
-    const peerPublicRaw = Uint8Array.fromHex(proposal.params.proposer.publicKey)
-    const peerPublicRef = await crypto.subtle.importKey("raw", peerPublicRaw, "X25519", false, [])
+    const peerPubRaw = Uint8Array.fromHex(proposal.params.proposer.publicKey)
+    const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
 
-    const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPublicRef }, selfPrivateRef, 256))
+    const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, selfKeyPair.privateKey, 256))
+    const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
 
-    const hdfk_key = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveBits"])
-    const hkdf_params = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
+    const hkdf = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-    const sessionKey = new Uint8Array(await crypto.subtle.deriveBits(hkdf_params, hdfk_key, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
-    const sessionTopic = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKey)).toHex()
-    const session = CryptoClient.createOrThrow(irn, sessionTopic, sessionKey, timeout)
+    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdf, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+    const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-    await irn.subscribe(sessionTopic, AbortSignal.timeout(timeout))
+    const session = new CryptoClient(irn, sessionTpcHex, sessionKeyRaw)
 
-    {
-      const { proposer, requiredNamespaces, optionalNamespaces } = proposal.params
+    await irn.subscribe(sessionTpcHex, signal)
 
-      const namespaces = {
-        eip155: {
-          chains: chains.map(chainId => `eip155:${chainId}`),
-          methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData", "eth_signTypedData_v4"],
-          events: ["chainChanged", "accountsChanged"],
-          accounts: chains.map(chainId => `eip155:${chainId}:${address}`)
-        }
-      }
+    const { proposer, requiredNamespaces, optionalNamespaces } = proposal.params
 
-      const controller = { publicKey: selfPublicHex, metadata }
-      const expiry = Math.floor((Date.now() + (7 * 24 * 60 * 60 * 1000)) / 1000)
-      const params: WcSessionSettleParams = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic, controller, expiry }
+    const controller = { publicKey: selfPubHex, metadata }
+    const expiry = Math.floor((Date.now() + (7 * 24 * 60 * 60 * 1000)) / 1000)
 
-      const settlement = await session.requestOrThrow<boolean>({ method: "wc_sessionSettle", params })
+    const params2: WcSessionSettleParams = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: params.pairingTopic, controller, expiry }
 
-      return [new WcSession(session, proposer.metadata), settlement]
-    }
+    const settlement = await session.requestOrThrow<boolean>({ method: "wc_sessionSettle", params: params2 })
+
+    return [new WcSession(session, proposer.metadata), settlement]
   }
 
 }
