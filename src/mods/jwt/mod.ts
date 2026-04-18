@@ -5,7 +5,7 @@ import { base58 } from "@scure/base";
 
 export namespace Jwt {
 
-  export async function signOrThrow(sigraw: Uint8Array<ArrayBuffer>, audience: string): Promise<string> {
+  export async function signOrThrow(jwk: Uint8Array<ArrayBuffer>, aud: string): Promise<string> {
     const alg = "EdDSA"
     const typ = "JWT"
 
@@ -13,14 +13,13 @@ export namespace Jwt {
 
     const prefix = new Uint8Array([0xed, 0x01])
 
-    const sigref = await Ed25519.importKey(sigraw)
+    const sigref = await Ed25519.importKey(jwk)
     const pubref = await Ed25519.publishKey(sigref)
 
     const pubraw = new Uint8Array(await crypto.subtle.exportKey("raw", pubref))
 
     const iss = `did:key:z${base58.encode(Bytes.concat(prefix, pubraw))}`
     const sub = crypto.getRandomValues(new Uint8Array(32)).toHex()
-    const aud = audience
     const iat = Math.floor(Date.now() / 1000)
     const ttl = 24 * 60 * 60 // one day in seconds
     const exp = iat + ttl
