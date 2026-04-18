@@ -7,7 +7,7 @@
   "repository": "github:hazae41/latrine",
   "author": "hazae41",
   "scripts": {
-    "examine": "deno lint ./src && deno check ./src && deno test -RW ./src",
+    "examine": "deno lint ./src && deno check ./src && deno test -A ./src",
     "prepack": "rm -rf ./out && tsc && tscousin"
   },
   "files": [
@@ -20,6 +20,7 @@
     }
   },
   "devDependencies": {
+    "@hazae41/chacha20poly1305-wasm": "^2.0.0",
     "@hazae41/phobos": "^2.0.16",
     "@hazae41/tscousin": "^1.0.28",
     "@types/node": "^25.0.3",
@@ -57,6 +58,7 @@
     "@hazae41/binary": "^2.0.2",
     "@hazae41/cursor": "^2.1.4",
     "@hazae41/jsonrpc": "^1.1.11",
+    "@hazae41/plume": "^4.0.0",
     "@hazae41/result-and-option": "^2.0.10",
     "@scure/base": "^2.0.0"
   }

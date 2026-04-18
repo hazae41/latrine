@@ -1,12 +1,10 @@
-import { Base16 } from "@hazae41/base16";
-import type { Uint8Array } from "@hazae41/bytes";
-import { Bytes } from "@hazae41/bytes";
-import { Future } from "@hazae41/future";
+// deno-lint-ignore-file no-explicit-any
+
+import type { Uint8Array } from "@/libs/bytes/mod.ts";
+import { CryptoClient, RpcReceiptAndPromise } from "@/mods/crypto/mod.ts";
+import { IrnClient } from "@/mods/irn/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
-import { Option, Some } from "@hazae41/option";
-import { X25519 } from "@hazae41/x25519";
-import { CryptoClient, RpcReceiptAndPromise } from "mods/crypto/index.js";
-import { IrnClientLike } from "mods/irn/index.js";
+import { Option } from "@hazae41/result-and-option";
 
 export interface WcMetadata {
   readonly name: string
@@ -68,10 +66,12 @@ export class WcSession {
     readonly metadata: WcMetadata
   ) { }
 
-  async closeOrThrow(reason: unknown): Promise<void> {
+  async close(reason?: string): Promise<void> {
     const params = { code: 6000, message: "User disconnected." }
+
     await this.client.requestOrThrow({ method: "wc_sessionDelete", params })
-    await this.client.irn.closeOrThrow(reason)
+
+    this.client.irn.close(reason)
   }
 
 }
@@ -81,7 +81,7 @@ export interface WcPairParams {
   readonly version: "2"
   readonly pairingTopic: string
   readonly relayProtocol: "irn"
-  readonly symKey: Uint8Array<32>
+  readonly symKey: Uint8Array<ArrayBuffer, 32>
 }
 
 export interface WcSessionParams {
@@ -89,7 +89,7 @@ export interface WcSessionParams {
   readonly version: "2"
   readonly sessionTopic: string
   readonly relayProtocol: "irn"
-  readonly symKey: Uint8Array<32>
+  readonly symKey: Uint8Array<ArrayBuffer, 32>
 }
 
 export namespace Wc {
@@ -113,50 +113,56 @@ export namespace Wc {
       throw new Error(`Invalid relay protocol`)
 
     const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
+    const symKeyRaw = Uint8Array.fromHex(symKeyHex) as Uint8Array<ArrayBuffer, 32>
 
-    using symKeyMem = Base16.get().getOrThrow().padStartAndDecodeOrThrow(symKeyHex)
-    const symKey = Bytes.castOrThrow(symKeyMem.bytes.slice(), 32)
-
-    return { protocol, pairingTopic, version, relayProtocol, symKey }
+    return { protocol, pairingTopic, version, relayProtocol, symKey: symKeyRaw }
   }
 
-  export async function pairOrThrow(irn: IrnClientLike, params: WcPairParams, metadata: WcMetadata, address: string, chains: number[], timeout: number): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
+  export async function pairOrThrow(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, address: string, chains: number[], timeout: number): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
     const { pairingTopic, symKey } = params
 
     const pairing = CryptoClient.createOrThrow(irn, pairingTopic, symKey, timeout)
 
     const relay = { protocol: "irn" }
 
-    using selfPrivate = await X25519.get().getOrThrow().PrivateKey.randomOrThrow()
-    using selfPublic = selfPrivate.getPublicKeyOrThrow()
+    const selfPairRef = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
-    using selfPublicMemory = await selfPublic.exportOrThrow()
-    const selfPublicHex = Base16.get().getOrThrow().encodeOrThrow(selfPublicMemory)
+    const selfPrivateRef = selfPairRef.privateKey
+    const selfPublicRef = selfPairRef.publicKey
 
-    await irn.subscribeOrThrow(pairingTopic, AbortSignal.timeout(timeout))
+    const selfPublicRaw = new Uint8Array(await crypto.subtle.exportKey("raw", selfPublicRef))
+    const selfPublicHex = selfPublicRaw.toHex()
 
-    const proposal = await pairing.events.wait("request", async (future: Future<RpcRequestPreinit<WcSessionProposeParams>>, request) => {
+    await irn.subscribe(pairingTopic, AbortSignal.timeout(timeout))
+
+    const preproposal = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
+
+    pairing.addEventListener("request", (event) => {
+      const request = event.data
+
       if (request.method !== "wc_sessionPropose")
         return
-      future.resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
-      return new Some({ relay, responderPublicKey: selfPublicHex })
-    }).inner
 
-    using peerPublicMemory = Base16.get().getOrThrow().padStartAndDecodeOrThrow(proposal.params.proposer.publicKey)
-    using peerPublic = await X25519.get().getOrThrow().PublicKey.importOrThrow(peerPublicMemory)
+      preproposal.resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
 
-    using shared = await selfPrivate.computeOrThrow(peerPublic)
-    using sharedMemory = shared.exportOrThrow()
+      event.respondWith({ relay, responderPublicKey: selfPublicHex })
+    }, { once: true })
 
-    const hdfk_key = await crypto.subtle.importKey("raw", sharedMemory.bytes, "HKDF", false, ["deriveBits"])
+    const proposal = await preproposal.promise
+
+    const peerPublicRaw = Uint8Array.fromHex(proposal.params.proposer.publicKey)
+    const peerPublicRef = await crypto.subtle.importKey("raw", peerPublicRaw, "X25519", false, [])
+
+    const shared = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPublicRef }, selfPrivateRef, 256))
+
+    const hdfk_key = await crypto.subtle.importKey("raw", shared, "HKDF", false, ["deriveBits"])
     const hkdf_params = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-    const sessionKey = new Uint8Array(await crypto.subtle.deriveBits(hkdf_params, hdfk_key, 8 * 32)) as Uint8Array<32>
-    const sessionDigest = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKey))
-    const sessionTopic = Base16.get().getOrThrow().encodeOrThrow(sessionDigest)
+    const sessionKey = new Uint8Array(await crypto.subtle.deriveBits(hkdf_params, hdfk_key, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+    const sessionTopic = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKey)).toHex()
     const session = CryptoClient.createOrThrow(irn, sessionTopic, sessionKey, timeout)
 
-    await irn.subscribeOrThrow(sessionTopic, AbortSignal.timeout(timeout))
+    await irn.subscribe(sessionTopic, AbortSignal.timeout(timeout))
 
     {
       const { proposer, requiredNamespaces, optionalNamespaces } = proposal.params

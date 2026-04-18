@@ -1,8 +1,7 @@
 import { SafeJson } from "@/libs/json/mod.ts"
-import { Awaitable } from "@/libs/promises/mod.ts"
 import { SafeRpc } from "@/libs/rpc/mod.ts"
-import { RpcError, RpcInvalidRequestError, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc"
-import { Err, Ok } from "@hazae41/result-and-option"
+import { RpcErr, RpcError, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit } from "@hazae41/jsonrpc"
+import { DataRespondableEvent } from "@hazae41/plume"
 
 export interface IrnPublishPayload {
   readonly topic: string
@@ -24,31 +23,22 @@ export interface IrnSubscriptionPayloadData {
   readonly tag: number
 }
 
-export type IrnEvents = CloseEvents & ErrorEvents & {
-  request: (request: RpcRequestPreinit<unknown>) => unknown
-}
+export interface IrnClientEventMap {
+  error: Event
 
-export interface IrnClientLike {
-  readonly events: SuperEventTarget<IrnEvents>
+  close: CloseEvent
 
-  subscribeOrThrow(topic: string, signal?: AbortSignal): Awaitable<string>
-
-  publishOrThrow(payload: IrnPublishPayload, signal?: AbortSignal): Awaitable<void>
-
-  closeOrThrow(reason?: unknown): Awaitable<void>
+  request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
 }
 
 export interface IrnClientParams {
   readonly shouldCloseOnDispose?: boolean
 }
 
-export class IrnClient implements IrnClientLike {
+export class IrnClient extends EventTarget {
 
-  readonly events = new SuperEventTarget<CloseEvents & ErrorEvents & {
-    request: (request: RpcRequestPreinit<unknown>) => unknown
-  }>()
+  readonly #aborter = new AbortController()
 
-  readonly #stack = new DisposableStack()
   readonly #topics = new Map<string, string>()
 
   #closed?: { reason?: unknown }
@@ -57,28 +47,35 @@ export class IrnClient implements IrnClientLike {
     readonly socket: WebSocket,
     readonly params: IrnClientParams = {}
   ) {
-    const onSocketMessage = this.#onSocketMessage.bind(this)
-    socket.addEventListener("message", onSocketMessage, { passive: true })
-    this.#stack.defer(() => socket.removeEventListener("message", onSocketMessage))
+    super()
 
-    const onSocketClose = this.#onSocketClose.bind(this)
-    socket.addEventListener("close", onSocketClose, { passive: true })
-    this.#stack.defer(() => socket.removeEventListener("close", onSocketClose))
+    const { signal } = this.#aborter
 
-    const onSocketError = this.#onSocketError.bind(this)
-    socket.addEventListener("error", onSocketError, { passive: true })
-    this.#stack.defer(() => socket.removeEventListener("error", onSocketError))
+    socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal })
+    socket.addEventListener("close", this.#onSocketClose.bind(this), { signal })
+    socket.addEventListener("error", this.#onSocketError.bind(this), { signal })
   }
 
   [Symbol.dispose]() {
-    using _ = this.#stack
+    if (this.closed)
+      return
+
+    this.#aborter.abort()
 
     const { shouldCloseOnDispose = true } = this.params
 
-    if (shouldCloseOnDispose)
-      return void this.closeOrThrow()
+    if (!shouldCloseOnDispose)
+      return
 
-    return
+    return this.close()
+  }
+
+  addEventListener<K extends keyof IrnClientEventMap>(type: K, listener: (e: IrnClientEventMap[K]) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+    super.addEventListener(type, callback, options)
   }
 
   get closed() {
@@ -86,67 +83,80 @@ export class IrnClient implements IrnClientLike {
   }
 
   #onSocketClose(event: CloseEvent) {
-    using _ = this.#stack
+    const { reason } = event
 
-    this.#closed = { reason: event.reason }
+    this.#aborter.abort()
 
-    this.events.emit("close", [event.reason]).catch(console.error)
+    this.#closed = { reason }
+
+    const subevent = new CloseEvent("close", { reason })
+
+    this.dispatchEvent(subevent)
   }
 
-  #onSocketError(event: Event) {
-    using _ = this.#stack
+  #onSocketError() {
+    this.#aborter.abort()
 
     this.#closed = {}
 
-    this.events.emit("error", [undefined]).catch(console.error)
+    const subevent = new Event("error")
+
+    this.dispatchEvent(subevent)
   }
 
   #onSocketMessage(event: MessageEvent<unknown>) {
     if (typeof event.data !== "string")
       return
-    const json = JSON.parse(event.data) as RpcRequestInit<unknown> | RpcResponseInit<unknown>
 
-    if ("method" in json)
-      this.#onRequest(json).catch(console.error)
+    const message = JSON.parse(event.data) as RpcMessageInit
+
+    if ("method" in message)
+      this.#onRequest(message).catch(console.error)
 
     return
   }
 
   async #onRequest(request: RpcRequestInit<unknown>) {
-    const result = await this.#routeAndWrap(request)
-    const response = RpcResponse.rewrap(request.id, result)
-    this.socket.send(SafeJson.stringify(response))
+    this.socket.send(SafeJson.stringify(await this.#respond(request)))
   }
 
-  async #routeAndWrap(request: RpcRequestPreinit<unknown>) {
+  async #respond(request: RpcRequestInit<unknown>) {
     try {
-      const returned = await this.events.emit("request", request)
+      const event = new DataRespondableEvent("request", { data: request })
 
-      if (returned.isSome())
-        return new Ok(returned.inner)
+      this.dispatchEvent(event)
 
-      return new Err(new RpcInvalidRequestError())
+      await event.extension
+
+      if (event.response != null)
+        return new RpcOk(request.id, await event.response)
+
+      return new RpcErr(request.id, new RpcInvalidRequestError())
     } catch (e: unknown) {
-      return new Err(RpcError.rewrap(e))
+      return new RpcErr(request.id, RpcError.rewrap(e))
     }
   }
 
-  async subscribeOrThrow(topic: string, signal = new AbortController().signal): Promise<string> {
+  async subscribe(topic: string, signal = new AbortController().signal): Promise<string> {
+    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
+
     const subscription = await SafeRpc.requestOrThrow<string>(this.socket, {
       method: "irn_subscribe",
       params: { topic }
-    }, signal).then(r => r.getOrThrow())
+    }, subsignal).then(r => r.getOrThrow())
 
     this.#topics.set(subscription, topic)
 
     return subscription
   }
 
-  async publishOrThrow(payload: IrnPublishPayload, signal = new AbortController().signal): Promise<void> {
+  async publish(payload: IrnPublishPayload, signal = new AbortController().signal): Promise<void> {
+    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
+
     const result = await SafeRpc.requestOrThrow<boolean>(this.socket, {
       method: "irn_publish",
       params: payload
-    }, signal).then(r => r.getOrThrow())
+    }, subsignal).then(r => r.getOrThrow())
 
     if (!result)
       throw new Error("Failed to publish")
@@ -154,12 +164,14 @@ export class IrnClient implements IrnClientLike {
     return
   }
 
-  closeOrThrow(reason?: unknown) {
-    using _ = this.#stack
+  close(reason?: string) {
+    this.#aborter.abort()
 
     this.#closed = { reason }
 
-    this.events.emit("close", [reason]).catch(console.error)
+    const event = new CloseEvent("close", { reason })
+
+    this.dispatchEvent(event)
 
     this.socket.close()
   }

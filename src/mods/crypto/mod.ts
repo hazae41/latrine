@@ -2,11 +2,13 @@ import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "@/libs/crypto/mod.ts";
 import { SafeJson } from "@/libs/json/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
-import { IrnClientLike, IrnSubscriptionPayload } from "@/mods/irn/mod.ts";
+import { IrnSubscriptionPayload } from "@/mods/irn/mod.ts";
+import { IrnClient } from "@/mods/mod.ts";
 import { Readable, Unknown, Writable } from "@hazae41/binary";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
-import { RpcError, RpcId, RpcInvalidRequestError, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
-import { Err, Ok, Some } from "@hazae41/result-and-option";
+import { RpcErr, RpcError, RpcId, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
+import { DataExtendableEvent, DataRespondableEvent } from "@hazae41/plume";
+import { Some } from "@hazae41/result-and-option";
 
 export interface RpcOpts {
   readonly prompt: boolean
@@ -132,83 +134,125 @@ export interface CryptoClientParams {
   readonly shouldCloseOnDispose?: boolean
 }
 
-export class CryptoClient {
+export interface CryptoClientEventMap {
+  error: Event
 
-  readonly events = new SuperEventTarget<CloseEvents & ErrorEvents & {
-    request: (request: RpcRequestPreinit<unknown>) => unknown
-    response: (response: RpcResponseInit<unknown>) => void
-  }>()
+  close: CloseEvent
 
-  #stack = new DisposableStack()
+  request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
+
+  response: DataExtendableEvent<RpcResponseInit<unknown>>
+}
+
+export class CryptoClient extends EventTarget {
+
+  readonly #aborter = new AbortController()
+
   #acks = new Set<number>()
 
+  #closed?: { reason?: unknown }
+
   private constructor(
-    readonly irn: IrnClientLike,
+    readonly irn: IrnClient,
     readonly topic: string,
     readonly key: Uint8Array<ArrayBuffer, 32>,
     readonly cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher,
     readonly timeout: number,
     readonly params: CryptoClientParams
   ) {
-    this.#stack.defer(irn.events.on("close", this.#onIrnClose.bind(this), { passive: true }))
-    this.#stack.defer(irn.events.on("error", this.#onIrnError.bind(this), { passive: true }))
-    this.#stack.defer(irn.events.on("request", this.#onIrnRequest.bind(this), { passive: true }))
+    super()
+
+    const { signal } = this.#aborter
+
+    irn.addEventListener("close", this.#onIrnClose.bind(this), { signal })
+    irn.addEventListener("error", this.#onIrnError.bind(this), { signal })
+    irn.addEventListener("request", this.#onIrnRequest.bind(this), { signal })
   }
 
-  static createOrThrow(irn: IrnClientLike, topic: string, key: Uint8Array<ArrayBuffer, 32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
-    const cipher = chaCha20Poly1305.get().getOrThrow().ChaCha20Poly1305Cipher.importOrThrow(key)
-    const client = new CryptoClient(irn, topic, key, cipher, timeout, params)
+  static createOrThrow(irn: IrnClient, topic: string, key: Uint8Array<ArrayBuffer, 32>, timeout: number, params: CryptoClientParams = {}): CryptoClient {
+    const { Memory, ChaCha20Poly1305Cipher } = chaCha20Poly1305.get().getOrThrow()
 
-    return client
+    const memory = Memory.fromOrThrow(key)
+    const cipher = ChaCha20Poly1305Cipher.importOrThrow(memory)
+
+    return new CryptoClient(irn, topic, key, cipher, timeout, params)
   }
 
   [Symbol.dispose]() {
-    using _ = this.#stack
+    if (this.closed)
+      return
+
+    this.#aborter.abort()
 
     const { shouldCloseOnDispose = true } = this.params
 
-    if (shouldCloseOnDispose)
-      return void this.closeOrThrow().catch(console.error)
+    if (!shouldCloseOnDispose)
+      return
 
-    return
+    return this.close()
   }
 
-  async #onIrnClose(reason?: unknown) {
-    using _ = this.#stack
+  addEventListener<K extends keyof CryptoClientEventMap>(type: K, listener: (e: CryptoClientEventMap[K]) => void, options?: AddEventListenerOptions): void
 
-    this.events.emit("close", [reason]).catch(console.error)
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+    super.addEventListener(type, callback, options)
   }
 
-  async #onIrnError(reason?: unknown) {
-    using _ = this.#stack
-
-    this.events.emit("error", [reason]).catch(console.error)
+  get closed() {
+    return this.#closed
   }
 
-  async #onIrnRequest(request: RpcRequestPreinit<unknown>) {
+  #onIrnClose(event: CloseEvent) {
+    const { reason } = event
+
+    this.#aborter.abort()
+
+    this.#closed = { reason }
+
+    const subevent = new CloseEvent("close", { reason })
+
+    this.dispatchEvent(subevent)
+  }
+
+  #onIrnError() {
+    this.#aborter.abort()
+
+    this.#closed = {}
+
+    const subevent = new Event("error")
+
+    this.dispatchEvent(subevent)
+  }
+
+  #onIrnRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data
+
     if (request.method === "irn_subscription")
-      return await this.#onIrnSubscription(request)
+      return this.#onIrnSubscription(event, request)
+
     return
   }
 
-  async #onIrnSubscription(request: RpcRequestPreinit<unknown>) {
+  #onIrnSubscription(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>, request: RpcRequestPreinit<unknown>) {
     const { data } = (request as RpcRequestPreinit<IrnSubscriptionPayload>).params
 
     if (data.topic !== this.topic)
       return
 
-    return new Some(await this.#onMessage(data.message))
+    return event.respondWith(this.#onMessage(data.message))
   }
 
   async #onMessage(message: string): Promise<true> {
-    const slice = Uint8Array.fromBase64(message)
+    const written = Uint8Array.fromBase64(message)
+    const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
 
-    const envelope = Readable.readFromBytesOrThrow(Envelope, slice)
-    const cipher = envelope.fragment.readIntoOrThrow(Ciphertext)
-    const plain = cipher.decryptOrThrow(this.cipher)
-    const plaintext = new TextDecoder().decode(plain.fragment.bytes)
+    const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
+    const decrypted = encrypted.decryptOrThrow(this.cipher)
 
-    const data = SafeJson.parse(plaintext) as RpcRequestInit<unknown> | RpcResponseInit<unknown>
+    const json = new TextDecoder().decode(decrypted.fragment.bytes)
+    const data = SafeJson.parse(json) as RpcMessageInit
 
     if ("method" in data)
       this.#onRequest(data).catch(console.error)
@@ -221,13 +265,12 @@ export class CryptoClient {
   async #onRequest(request: RpcRequestInit<unknown>): Promise<void> {
     if (typeof request.id !== "number")
       return
-
     if (this.#acks.has(request.id))
       return
+
     this.#acks.add(request.id)
 
-    const result = await this.#routeAndWrap(request)
-    const response = RpcResponse.rewrap(request.id, result)
+    const response = await this.#respond(request)
 
     const { topic } = this
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[request.method].res
@@ -237,39 +280,46 @@ export class CryptoClient {
     const payload = { topic, message, prompt, tag, ttl }
     const signal = AbortSignal.timeout(this.timeout)
 
-    await this.irn.publishOrThrow(payload, signal)
+    await this.irn.publish(payload, signal)
   }
 
-  async #routeAndWrap(request: RpcRequestPreinit<unknown>) {
+  async #respond(request: RpcRequestInit<unknown>) {
     try {
-      const returned = await this.events.emit("request", request)
+      const event = new DataRespondableEvent("request", { data: request })
 
-      if (returned.isSome())
-        return new Ok(returned.inner)
+      this.dispatchEvent(event)
 
-      return new Err(new RpcInvalidRequestError())
+      await event.extension
+
+      if (event.response != null)
+        return new RpcOk(request.id, await event.response)
+
+      return new RpcErr(request.id, new RpcInvalidRequestError())
     } catch (e: unknown) {
-      return new Err(RpcError.rewrap(e))
+      return new RpcErr(request.id, RpcError.rewrap(e))
     }
   }
 
   async #onResponse(response: RpcResponseInit<unknown>) {
-    const returned = await this.events.emit("response", response)
+    const event = new DataExtendableEvent("response", { data: response })
 
-    if (returned.isSome())
-      return
+    this.dispatchEvent(event)
 
-    console.warn(`Unhandled response`, response)
+    await event.extension
   }
 
   #encryptOrThrow(data: unknown): string {
-    const plaintext = SafeJson.stringify(data)
-    const plain = new Plaintext(new Unknown(new TextEncoder().encode(plaintext)))
-    const iv = crypto.getRandomValues(new Uint8Array(12))
-    const cipher = plain.encryptOrThrow(this.cipher, iv)
-    const envelope = new EnvelopeTypeZero(cipher)
-    const bytes = Writable.writeToBytesOrThrow(envelope)
-    const message = bytes.toBase64({ alphabet: "base64", omitPadding: false })
+    const json = SafeJson.stringify(data)
+
+    const nonce = crypto.getRandomValues(new Uint8Array(12))
+
+    const decrypted = new Plaintext(new Unknown(new TextEncoder().encode(json)))
+    const encrypted = decrypted.encryptOrThrow(this.cipher, nonce)
+
+    const wrapper = new EnvelopeTypeZero(encrypted)
+    const written = Writable.writeToBytesOrThrow(wrapper)
+
+    const message = written.toBase64({ alphabet: "base64", omitPadding: false })
 
     return message
   }
@@ -290,7 +340,7 @@ export class CryptoClient {
     const payload = { topic, message, prompt, tag, ttl }
     const signal = AbortSignal.timeout(this.timeout)
 
-    await this.irn.publishOrThrow(payload, signal)
+    await this.irn.publish(payload, signal)
 
     return { receipt, promise }
   }
@@ -298,32 +348,36 @@ export class CryptoClient {
   async waitOrThrow<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
-    const future = Promise.withResolvers<RpcResponse<T>>()
-    const signal = AbortSignal.timeout(receipt.end - Date.now())
+    const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
 
-    const onResponse = (init: RpcResponseInit<any>) => {
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
+
+    const onResponse = (event: DataExtendableEvent<RpcResponseInit<unknown>>) => {
+      const init = event.data as RpcResponseInit<T>
+
       if (init.id !== receipt.id)
         return
 
       const response = RpcResponse.from<T>(init)
 
-      future.resolve(response)
+      resolve(response)
 
       return new Some(undefined)
     }
 
-    stack.defer(this.events.on("response", onResponse, { passive: true }))
+    this.addEventListener("response", onResponse, { signal: cleaner.signal })
 
-    const onAbort = () => future.reject(new Error("Aborted", { cause: signal.reason }))
+    const signal = AbortSignal.timeout(receipt.end - Date.now())
 
-    signal.addEventListener("abort", onAbort, { passive: true })
-    stack.defer(() => signal.removeEventListener("abort", onAbort))
+    const onAbort = () => reject(new Error("Aborted", { cause: signal.reason }))
+    signal.addEventListener("abort", onAbort, { signal: cleaner.signal })
 
-    return await future.promise
+    return await promise
   }
 
-  async closeOrThrow(reason?: unknown) {
-    await this.irn.closeOrThrow(reason)
+  close(reason?: string) {
+    this.irn.close(reason)
   }
 
 }
