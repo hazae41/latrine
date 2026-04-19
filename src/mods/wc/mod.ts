@@ -153,6 +153,8 @@ export namespace WalletConnect {
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
+    const { relay } = client
+
     const { pairingTopic, symKey } = params.pair
 
     const selfKeyPair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
@@ -172,7 +174,7 @@ export namespace WalletConnect {
 
       resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
 
-      event.respondWith({ relay: client.relay, responderPublicKey: selfPubHex })
+      event.respondWith({ relay, responderPublicKey: selfPubHex })
     }, { signal: cleaner.signal })
 
     signal.addEventListener("abort", reject, { signal: cleaner.signal })
@@ -194,8 +196,6 @@ export namespace WalletConnect {
     const settling = new CryptoChannel(client, sessionTpcHex, sessionKeyRaw)
 
     await settling.subscribe(signal)
-
-    const { relay } = client
 
     const { self } = params
 
