@@ -7,7 +7,7 @@
   "repository": "github:hazae41/latrine",
   "author": "hazae41",
   "scripts": {
-    "examine": "deno lint ./src && deno check ./src && deno test -A ./src",
+    "examine": "deno lint ./src && deno check ./src && deno test ./src",
     "prepack": "rm -rf ./out && tsc && tscousin"
   },
   "files": [

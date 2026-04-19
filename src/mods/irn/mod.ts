@@ -31,10 +31,6 @@ export interface IrnClientEventMap {
   request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
 }
 
-export interface IrnClientParams {
-  readonly shouldCloseOnDispose?: boolean
-}
-
 export class IrnClient extends EventTarget {
 
   readonly #aborter = new AbortController()
@@ -44,8 +40,7 @@ export class IrnClient extends EventTarget {
   #closed?: { reason?: unknown }
 
   constructor(
-    readonly socket: WebSocket,
-    readonly params: IrnClientParams = {}
+    readonly socket: WebSocket
   ) {
     super()
 
@@ -57,17 +52,7 @@ export class IrnClient extends EventTarget {
   }
 
   [Symbol.dispose]() {
-    if (this.closed)
-      return
-
     this.#aborter.abort()
-
-    const { shouldCloseOnDispose = true } = this.params
-
-    if (!shouldCloseOnDispose)
-      return
-
-    return this.close()
   }
 
   addEventListener<K extends keyof IrnClientEventMap>(type: K, listener: (e: IrnClientEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -152,6 +137,10 @@ export class IrnClient extends EventTarget {
     this.#topics.set(subscription, topic)
 
     return subscription
+  }
+
+  async unsubscribe(subscription: string, signal = new AbortController().signal): Promise<void> {
+    // TODO
   }
 
   async publish(payload: IrnPublishPayload, signal = new AbortController().signal): Promise<void> {

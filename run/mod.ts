@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-unused-vars no-process-global
+
 import { CryptoChannel } from "@/mods/mod.ts";
 import { WalletConnect, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
@@ -7,7 +9,7 @@ await chaCha20Poly1305Wasm.load()
 
 chaCha20Poly1305.set(chaCha20Poly1305.fromWasm(chaCha20Poly1305Wasm))
 
-const address = "0xD231b3331C831Fc99152b5BEE366335B9C6c71e7"
+const address = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 const chains = [1]
 
 const self = {
@@ -55,13 +57,11 @@ console.log("Pairing...")
 /**
  * Start by pairing
  */
-const session = await pair("wc:c55fc237597d7eee090367a0be2b56c1cae73a7bead9d238bef16b763da1f42c@2?relay-protocol=irn&symKey=904e1bbe5a68d43dd945158f163b27da2ca2f468eb8d2aa0c09eea537664abff&expiryTimestamp=1776571946")
+const session = await pair(process.argv[2])
 
 console.log("Session paired")
 
-session.channel.addEventListener("request", console.log)
-
-await new Promise(resolve => setTimeout(resolve, 5000))
+await new Promise(resolve => setTimeout(resolve, 1000))
 
 console.log("Simulating disconnection...")
 
@@ -69,7 +69,7 @@ session.channel.client.socket.close()
 
 console.log("Session disconnected")
 
-await new Promise(resolve => setTimeout(resolve, 5000))
+await new Promise(resolve => setTimeout(resolve, 10000))
 
 console.log("Resuming session...")
 
@@ -77,15 +77,15 @@ const session2 = await resume(session)
 
 console.log("Session resumed")
 
-session2.channel.addEventListener("request", console.log)
+session2.channel.addEventListener("request", e => console.log(e.data))
 
-await new Promise(resolve => setTimeout(resolve, 5000))
+// await new Promise(resolve => setTimeout(resolve, 5000))
 
-console.log("Closing session...")
+// console.log("Closing session...")
 
-/**
- * Close the session
- */
-await session2.delete()
+// /**
+//  * Close the session
+//  */
+// await session2.delete()
 
-console.log("Session closed")
+// console.log("Session closed")

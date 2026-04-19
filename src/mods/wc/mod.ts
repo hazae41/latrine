@@ -5,6 +5,7 @@ import { Jwt } from "@/libs/jwt/mod.ts";
 import { CryptoChannel, RpcReceiptAndPromise } from "@/mods/crypto/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { DataRespondableEvent } from "@hazae41/plume";
 import { Option } from "@hazae41/result-and-option";
 
 export interface WcMetadata {
@@ -72,12 +73,39 @@ export interface WcSessionData {
   readonly expiry: number
 }
 
-export class WcSession {
+export interface WcSessionEventMap {
+  request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
+}
+
+export class WcSession extends EventTarget {
+
+  readonly #aborter = new AbortController()
+
+  #closed?: { reason?: unknown }
 
   constructor(
     readonly channel: CryptoChannel,
     readonly settled: WcSessionData
-  ) { }
+  ) {
+    super()
+  }
+
+  [Symbol.dispose]() {
+    this.#aborter.abort()
+    this.channel.close()
+  }
+
+  addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+    super.addEventListener(type, callback, options)
+  }
+
+  get closed() {
+    return this.#closed
+  }
 
   async delete(reason?: string): Promise<void> {
     const params = { code: 6000, message: "User disconnected." }

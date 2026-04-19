@@ -129,10 +129,6 @@ export interface RpcReceiptAndPromise<T> {
   readonly promise: Promise<RpcResponse<T>>
 }
 
-export interface CryptoClientParams {
-  readonly shouldCloseOnDispose?: boolean
-}
-
 export interface CryptoClientEventMap {
   error: Event
 
@@ -157,7 +153,6 @@ export class CryptoChannel extends EventTarget {
     readonly client: IrnClient,
     readonly topic: string,
     readonly key: Uint8Array<ArrayBuffer, 32>,
-    readonly params: CryptoClientParams = {}
   ) {
     super()
 
@@ -173,17 +168,7 @@ export class CryptoChannel extends EventTarget {
   }
 
   [Symbol.dispose]() {
-    if (this.closed)
-      return
-
     this.#aborter.abort()
-
-    const { shouldCloseOnDispose = true } = this.params
-
-    if (!shouldCloseOnDispose)
-      return
-
-    return this.close()
   }
 
   addEventListener<K extends keyof CryptoClientEventMap>(type: K, listener: (e: CryptoClientEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -243,7 +228,7 @@ export class CryptoChannel extends EventTarget {
     const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
 
     const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
-    const decrypted = encrypted.decrypt(this.#cipher)
+    const decrypted = encrypted.decryptOrThrow(this.#cipher)
 
     const json = new TextDecoder().decode(decrypted.fragment.bytes)
     const data = SafeJson.parse(json) as RpcMessageInit
@@ -307,7 +292,7 @@ export class CryptoChannel extends EventTarget {
     const nonce = crypto.getRandomValues(new Uint8Array(12))
 
     const decrypted = new Plaintext(new Unknown(new TextEncoder().encode(json)))
-    const encrypted = decrypted.encrypt(this.#cipher, nonce)
+    const encrypted = decrypted.encryptOrThrow(this.#cipher, nonce)
 
     const wrapper = new EnvelopeTypeZero(encrypted)
     const written = Writable.writeToBytesOrThrow(wrapper)
