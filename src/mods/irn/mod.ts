@@ -1,6 +1,6 @@
 import { SafeJson } from "@/libs/json/mod.ts";
+import { Jwt } from "@/libs/jwt/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
-import { Jwt } from "@/mods/jwt/mod.ts";
 import { RpcErr, RpcError, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataRespondableEvent } from "@hazae41/plume";
 
