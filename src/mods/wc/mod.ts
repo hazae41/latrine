@@ -113,17 +113,17 @@ export namespace WcPairParams {
     const { protocol, pathname, searchParams } = new URL(rawUrl)
 
     if (protocol !== "wc:")
-      throw new Error(`Invalid protocol`)
+      throw new Error(`Unknown protocol`)
 
     const [pairingTopic, version] = pathname.split("@")
 
     if (version !== "2")
-      throw new Error(`Invalid version`)
+      throw new Error(`Unknown version`)
 
     const relayProtocol = Option.wrap(searchParams.get("relay-protocol")).getOrThrow()
 
     if (relayProtocol !== "irn")
-      throw new Error(`Invalid relay protocol`)
+      throw new Error(`Unknown relay protocol`)
 
     const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
     const symKeyRaw = Uint8Array.fromHex(symKeyHex) as Uint8Array<ArrayBuffer, 32>
