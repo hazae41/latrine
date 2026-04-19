@@ -81,7 +81,7 @@ export class WcSession {
   async delete(reason?: string): Promise<void> {
     const params = { code: 6000, message: "User disconnected." }
 
-    await this.channel.requestOrThrow({ method: "wc_sessionDelete", params })
+    await this.channel.request({ method: "wc_sessionDelete", params })
 
     this.channel.close(reason)
   }
@@ -145,9 +145,7 @@ export interface WcSettleParams {
   readonly expiry?: number
 }
 
-export namespace Wc {
-
-  export const RELAY = "wss://relay.walletconnect.org"
+export namespace WalletConnect {
 
   export async function settle(client: IrnClient, params: WcSettleParams, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
     using stack = new DisposableStack()
@@ -177,9 +175,7 @@ export namespace Wc {
       event.respondWith({ relay: client.relay, responderPublicKey: selfPubHex })
     }, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", () => {
-      reject(new Error("Aborted", { cause: signal.reason }))
-    }, { signal: cleaner.signal })
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     await pairing.subscribe(signal)
 
@@ -214,7 +210,7 @@ export namespace Wc {
 
     const controller = { publicKey: selfPubHex, metadata: self }
 
-    const settlement = await settling.requestOrThrow<boolean>({ method: "wc_sessionSettle", params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic, controller, expiry } })
+    const settlement = await settling.request<boolean>({ method: "wc_sessionSettle", params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic, controller, expiry } })
 
     const session = new WcSession(settling, { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry })
 

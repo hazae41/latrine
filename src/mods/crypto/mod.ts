@@ -243,7 +243,7 @@ export class CryptoChannel extends EventTarget {
     const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
 
     const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
-    const decrypted = encrypted.decryptOrThrow(this.#cipher)
+    const decrypted = encrypted.decrypt(this.#cipher)
 
     const json = new TextDecoder().decode(decrypted.fragment.bytes)
     const data = SafeJson.parse(json) as RpcMessageInit
@@ -307,7 +307,7 @@ export class CryptoChannel extends EventTarget {
     const nonce = crypto.getRandomValues(new Uint8Array(12))
 
     const decrypted = new Plaintext(new Unknown(new TextEncoder().encode(json)))
-    const encrypted = decrypted.encryptOrThrow(this.#cipher, nonce)
+    const encrypted = decrypted.encrypt(this.#cipher, nonce)
 
     const wrapper = new EnvelopeTypeZero(encrypted)
     const written = Writable.writeToBytesOrThrow(wrapper)
@@ -317,7 +317,11 @@ export class CryptoChannel extends EventTarget {
     return message
   }
 
-  async requestOrThrow<T>(init: RpcRequestPreinit<unknown>): Promise<RpcReceiptAndPromise<T>> {
+  async subscribe(signal = new AbortController().signal) {
+    await this.client.subscribe(this.topic, signal)
+  }
+
+  async request<T>(init: RpcRequestPreinit<unknown>): Promise<RpcReceiptAndPromise<T>> {
     const request = SafeRpc.prepare(init)
 
     const { topic } = this
@@ -328,7 +332,7 @@ export class CryptoChannel extends EventTarget {
     const end = Date.now() + (ttl * 1000)
 
     const receipt = { id, end }
-    const promise = this.waitOrThrow<T>(receipt)
+    const promise = this.wait<T>(receipt)
 
     const payload = { topic, message, prompt, tag, ttl }
 
@@ -337,7 +341,7 @@ export class CryptoChannel extends EventTarget {
     return { receipt, promise }
   }
 
-  async waitOrThrow<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
+  async wait<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -356,15 +360,9 @@ export class CryptoChannel extends EventTarget {
       resolve(RpcResponse.from<T>(init))
     }, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", () => {
-      reject(new Error("Aborted", { cause: signal.reason }))
-    }, { signal: cleaner.signal })
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     return await promise
-  }
-
-  async subscribe(signal = new AbortController().signal) {
-    await this.client.subscribe(this.topic, signal)
   }
 
   close(reason?: string) {

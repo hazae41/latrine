@@ -57,7 +57,7 @@ export class IrnClient extends EventTarget {
     socket.addEventListener("error", this.#onSocketError.bind(this), { signal })
   }
 
-  static async open(url: string, projectId: string, params: IrnClientParams = {}): Promise<IrnClient> {
+  static async open(url = "wss://relay.walletconnect.org", projectId: string, params: IrnClientParams = {}, signal = new AbortController().signal): Promise<IrnClient> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -72,6 +72,7 @@ export class IrnClient extends EventTarget {
 
     socket.addEventListener("open", resolve, { signal: cleaner.signal })
     socket.addEventListener("error", reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     await promise
 

@@ -34,17 +34,9 @@ export namespace SafeRpc {
       resolve(response)
     }, { signal: cleaner.signal })
 
-    socket.addEventListener("error", (cause: unknown) => {
-      reject(new Error("Errored", { cause }))
-    }, { signal: cleaner.signal })
-
-    socket.addEventListener("close", (cause: unknown) => {
-      reject(new Error("Closed", { cause }))
-    }, { signal: cleaner.signal })
-
-    signal.addEventListener("abort", () => {
-      reject(new Error("Aborted", { cause: signal.reason }))
-    }, { signal: cleaner.signal })
+    socket.addEventListener("error", reject, { signal: cleaner.signal })
+    socket.addEventListener("close", reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     socket.send(SafeJson.stringify(request))
 
