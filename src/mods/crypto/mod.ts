@@ -8,7 +8,6 @@ import { Readable, Unknown, Writable } from "@hazae41/binary";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { RpcErr, RpcError, RpcId, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
 import { DataExtendableEvent, DataRespondableEvent } from "@hazae41/plume";
-import { Some } from "@hazae41/result-and-option";
 
 export interface RpcOpts {
   readonly prompt: boolean
@@ -144,7 +143,7 @@ export interface CryptoClientEventMap {
   response: DataExtendableEvent<RpcResponseInit<unknown>>
 }
 
-export class CryptoClient extends EventTarget {
+export class CryptoChannel extends EventTarget {
 
   readonly #aborter = new AbortController()
 
@@ -155,7 +154,7 @@ export class CryptoClient extends EventTarget {
   #closed?: { reason?: unknown }
 
   constructor(
-    readonly irn: IrnClient,
+    readonly client: IrnClient,
     readonly topic: string,
     readonly key: Uint8Array<ArrayBuffer, 32>,
     readonly params: CryptoClientParams = {}
@@ -168,9 +167,9 @@ export class CryptoClient extends EventTarget {
 
     const { signal } = this.#aborter
 
-    irn.addEventListener("close", this.#onIrnClose.bind(this), { signal })
-    irn.addEventListener("error", this.#onIrnError.bind(this), { signal })
-    irn.addEventListener("request", this.#onIrnRequest.bind(this), { signal })
+    client.addEventListener("close", this.#onClientClose.bind(this), { signal })
+    client.addEventListener("error", this.#onClientError.bind(this), { signal })
+    client.addEventListener("request", this.#onClientRequest.bind(this), { signal })
   }
 
   [Symbol.dispose]() {
@@ -199,7 +198,7 @@ export class CryptoClient extends EventTarget {
     return this.#closed
   }
 
-  #onIrnClose(event: CloseEvent) {
+  #onClientClose(event: CloseEvent) {
     const { reason } = event
 
     this.#aborter.abort()
@@ -211,7 +210,7 @@ export class CryptoClient extends EventTarget {
     this.dispatchEvent(subevent)
   }
 
-  #onIrnError() {
+  #onClientError() {
     this.#aborter.abort()
 
     this.#closed = {}
@@ -221,7 +220,7 @@ export class CryptoClient extends EventTarget {
     this.dispatchEvent(subevent)
   }
 
-  #onIrnRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+  #onClientRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
     if (request.method === "irn_subscription")
@@ -236,10 +235,10 @@ export class CryptoClient extends EventTarget {
     if (data.topic !== this.topic)
       return
 
-    return event.respondWith(this.#onMessage(data.message))
+    return event.respondWith(this.#onIrnMessage(data.message))
   }
 
-  async #onMessage(message: string): Promise<true> {
+  async #onIrnMessage(message: string): Promise<true> {
     const written = Uint8Array.fromBase64(message)
     const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
 
@@ -274,7 +273,7 @@ export class CryptoClient extends EventTarget {
 
     const payload = { topic, message, prompt, tag, ttl }
 
-    await this.irn.publish(payload)
+    await this.client.publish(payload)
   }
 
   async #respond(request: RpcRequestInit<unknown>) {
@@ -333,7 +332,7 @@ export class CryptoClient extends EventTarget {
 
     const payload = { topic, message, prompt, tag, ttl }
 
-    await this.irn.publish(payload)
+    await this.client.publish(payload)
 
     return { receipt, promise }
   }
@@ -341,36 +340,35 @@ export class CryptoClient extends EventTarget {
   async waitOrThrow<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
-    const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
-
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const onResponse = (event: DataExtendableEvent<RpcResponseInit<unknown>>) => {
+    const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
+
+    const signal = AbortSignal.timeout(receipt.end - Date.now())
+
+    this.addEventListener("response", (event: DataExtendableEvent<RpcResponseInit<unknown>>) => {
       const init = event.data as RpcResponseInit<T>
 
       if (init.id !== receipt.id)
         return
 
-      const response = RpcResponse.from<T>(init)
+      resolve(RpcResponse.from<T>(init))
+    }, { signal: cleaner.signal })
 
-      resolve(response)
-
-      return new Some(undefined)
-    }
-
-    this.addEventListener("response", onResponse, { signal: cleaner.signal })
-
-    const signal = AbortSignal.timeout(receipt.end - Date.now())
-
-    const onAbort = () => reject(new Error("Aborted", { cause: signal.reason }))
-    signal.addEventListener("abort", onAbort, { signal: cleaner.signal })
+    signal.addEventListener("abort", () => {
+      reject(new Error("Aborted", { cause: signal.reason }))
+    }, { signal: cleaner.signal })
 
     return await promise
   }
 
+  async subscribe(signal = new AbortController().signal) {
+    await this.client.subscribe(this.topic, signal)
+  }
+
   close(reason?: string) {
-    this.irn.close(reason)
+    this.client.close(reason)
   }
 
 }

@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
-import { CryptoClient, RpcReceiptAndPromise } from "@/mods/crypto/mod.ts";
+import { CryptoChannel, RpcReceiptAndPromise } from "@/mods/crypto/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { Option } from "@hazae41/result-and-option";
@@ -59,19 +59,31 @@ export interface WcSessionRequestParams<T = unknown> {
   readonly request: RpcRequestPreinit<T>
 }
 
+export interface WcSessionData {
+  readonly self: WcMetadata
+  readonly peer: WcMetadata
+
+  readonly namespaces: unknown
+
+  readonly requiredNamespaces: unknown
+  readonly optionalNamespaces: unknown
+
+  readonly expiry: number
+}
+
 export class WcSession {
 
   constructor(
-    readonly client: CryptoClient,
-    readonly metadata: WcMetadata
+    readonly channel: CryptoChannel,
+    readonly settled: WcSessionData
   ) { }
 
-  async close(reason?: string): Promise<void> {
+  async delete(reason?: string): Promise<void> {
     const params = { code: 6000, message: "User disconnected." }
 
-    await this.client.requestOrThrow({ method: "wc_sessionDelete", params })
+    await this.channel.requestOrThrow({ method: "wc_sessionDelete", params })
 
-    this.client.close(reason)
+    this.channel.close(reason)
   }
 
 }
@@ -121,68 +133,38 @@ export namespace WcPairParams {
 
 }
 
-export interface WcSessionParams {
-  readonly protocol: "wc:"
-  readonly version: "2"
-  readonly sessionTopic: string
-  readonly relayProtocol: "irn"
-  readonly symKey: Uint8Array<ArrayBuffer, 32>
-}
+export interface WcSettleParams {
+  readonly self: WcMetadata
+  readonly pair: WcPairParams
 
-export namespace WcSessionParams {
+  readonly namespaces: unknown
 
-  export function stringify(params: WcSessionParams): string {
-    const { protocol, version, sessionTopic, relayProtocol, symKey } = params
+  readonly requiredNamespaces?: unknown
+  readonly optionalNamespaces?: unknown
 
-    const url = new URL(`${protocol}${sessionTopic}@${version}`)
-
-    url.searchParams.set("relay-protocol", relayProtocol)
-    url.searchParams.set("symKey", symKey.toHex())
-
-    return url.toString()
-  }
-
-  export function parse(rawUrl: string | URL): WcSessionParams {
-    const { protocol, pathname, searchParams } = new URL(rawUrl)
-
-    if (protocol !== "wc:")
-      throw new Error(`Invalid protocol`)
-
-    const [sessionTopic, version] = pathname.split("@")
-
-    if (version !== "2")
-      throw new Error(`Invalid version`)
-
-    const relayProtocol = Option.wrap(searchParams.get("relay-protocol")).getOrThrow()
-
-    if (relayProtocol !== "irn")
-      throw new Error(`Invalid relay protocol`)
-
-    const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
-    const symKeyRaw = Uint8Array.fromHex(symKeyHex) as Uint8Array<ArrayBuffer, 32>
-
-    return { protocol, sessionTopic, version, relayProtocol, symKey: symKeyRaw }
-  }
-
+  readonly expiry?: number
 }
 
 export namespace Wc {
 
   export const RELAY = "wss://relay.walletconnect.org"
 
-  export async function pair(irn: IrnClient, params: WcPairParams, metadata: WcMetadata, namespaces: unknown, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
-    const relay = { protocol: "irn" }
+  export async function settle(client: IrnClient, params: WcSettleParams, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
+    using stack = new DisposableStack()
 
-    const pairing = new CryptoClient(irn, params.pairingTopic, params.symKey)
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
 
-    await irn.subscribe(params.pairingTopic, signal)
+    const { pairingTopic, symKey } = params.pair
 
     const selfKeyPair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
     const selfPubKey = selfKeyPair.publicKey
     const selfPubHex = new Uint8Array(await crypto.subtle.exportKey("raw", selfPubKey)).toHex()
 
-    const preproposal = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
+    const pairing = new CryptoChannel(client, pairingTopic, symKey)
+
+    const { resolve, reject, promise } = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
 
     pairing.addEventListener("request", (event) => {
       const request = event.data
@@ -190,38 +172,53 @@ export namespace Wc {
       if (request.method !== "wc_sessionPropose")
         return
 
-      preproposal.resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
+      resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
 
-      event.respondWith({ relay, responderPublicKey: selfPubHex })
-    }, { once: true })
+      event.respondWith({ relay: client.relay, responderPublicKey: selfPubHex })
+    }, { signal: cleaner.signal })
 
-    const proposal = await preproposal.promise
+    signal.addEventListener("abort", () => {
+      reject(new Error("Aborted", { cause: signal.reason }))
+    }, { signal: cleaner.signal })
+
+    await pairing.subscribe(signal)
+
+    const proposal = await promise
 
     const peerPubRaw = Uint8Array.fromHex(proposal.params.proposer.publicKey)
     const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
 
     const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, selfKeyPair.privateKey, 256))
     const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
+    const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-    const hkdf = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
-
-    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdf, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
     const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-    const session = new CryptoClient(irn, sessionTpcHex, sessionKeyRaw)
+    const settling = new CryptoChannel(client, sessionTpcHex, sessionKeyRaw)
 
-    await irn.subscribe(sessionTpcHex, signal)
+    await settling.subscribe(signal)
 
-    const { proposer, requiredNamespaces, optionalNamespaces } = proposal.params
+    const { relay } = client
 
-    const controller = { publicKey: selfPubHex, metadata }
-    const expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60)
+    const { self } = params
 
-    const params2: WcSessionSettleParams = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: params.pairingTopic, controller, expiry }
+    const peer = proposal.params.proposer.metadata
 
-    const settlement = await session.requestOrThrow<boolean>({ method: "wc_sessionSettle", params: params2 })
+    const { namespaces } = params
 
-    return [new WcSession(session, proposer.metadata), settlement]
+    const { requiredNamespaces = proposal.params.requiredNamespaces } = params
+    const { optionalNamespaces = proposal.params.optionalNamespaces } = params
+
+    const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = params
+
+    const controller = { publicKey: selfPubHex, metadata: self }
+
+    const settlement = await settling.requestOrThrow<boolean>({ method: "wc_sessionSettle", params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic, controller, expiry } })
+
+    const session = new WcSession(settling, { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry })
+
+    return [session, settlement]
   }
 
 }

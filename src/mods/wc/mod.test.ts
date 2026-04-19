@@ -1,6 +1,5 @@
 import { IrnClient } from "@/mod.ts";
-import { Jwt } from "@/mods/jwt/mod.ts";
-import { CryptoClient } from "@/mods/mod.ts";
+import { CryptoChannel } from "@/mods/mod.ts";
 import { Wc, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
@@ -12,7 +11,7 @@ chaCha20Poly1305.set(chaCha20Poly1305.fromWasm(chaCha20Poly1305Wasm))
 const address = "0xD231b3331C831Fc99152b5BEE366335B9C6c71e7"
 const chains = [1]
 
-const metadata = {
+const self = {
   name: "Latrine",
   description: "A secure and private wallet for the web.",
   url: "https://latrine.hazae41.com",
@@ -28,34 +27,14 @@ const namespaces = {
   }
 }
 
-async function open(url: string, token: string, projectId: string) {
-  using stack = new DisposableStack()
-
-  const cleaner = new AbortController()
-  stack.defer(() => cleaner.abort())
-
-  const socket = new WebSocket(`${url}/?auth=${token}&projectId=${projectId}`)
-
-  const { resolve, reject, promise } = Promise.withResolvers()
-
-  socket.addEventListener("open", resolve, { signal: cleaner.signal })
-  socket.addEventListener("error", reject, { signal: cleaner.signal })
-
-  await promise
-
-  return new IrnClient(socket)
-}
-
 async function pair(url: string) {
-  const params = WcPairParams.parse(url)
+  const pair = WcPairParams.parse(url)
 
-  const jwk = crypto.getRandomValues(new Uint8Array(32))
-  const jwt = await Jwt.signOrThrow(jwk, Wc.RELAY)
-  const irn = await open(Wc.RELAY, jwt, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await IrnClient.open(Wc.RELAY, "b580c84c2c57b6e4f78ab117951de721")
 
-  const [session, settlement] = await Wc.pair(irn, params, metadata, namespaces)
+  const [session, settlement] = await Wc.settle(client, { pair, self, namespaces })
 
-  console.log(session.metadata)
+  console.log(session.settled)
 
   await settlement.promise
 
@@ -63,15 +42,13 @@ async function pair(url: string) {
 }
 
 async function resume(stale: WcSession) {
-  const jwk = crypto.getRandomValues(new Uint8Array(32))
-  const jwt = await Jwt.signOrThrow(jwk, Wc.RELAY)
-  const irn = await open(Wc.RELAY, jwt, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await IrnClient.open(Wc.RELAY, "b580c84c2c57b6e4f78ab117951de721")
 
-  const client = new CryptoClient(irn, stale.client.topic, stale.client.key)
+  const channel = new CryptoChannel(client, stale.channel.topic, stale.channel.key)
 
-  await irn.subscribe(stale.client.topic)
+  await channel.subscribe()
 
-  return new WcSession(client, stale.metadata)
+  return new WcSession(channel, stale.settled)
 }
 
 console.log("Pairing...")
@@ -79,17 +56,17 @@ console.log("Pairing...")
 /**
  * Start by pairing
  */
-const session = await pair("wc:40a51134e3290d73811e4904e2224a51e72431917e31d8ea15f0f52a3b374e55@2?relay-protocol=irn&symKey=accdc38e1523de72a43786e8d50670aafd2ca603b058b797570cd93d8d63ce25&expiryTimestamp=1776530253")
+const session = await pair("wc:c55fc237597d7eee090367a0be2b56c1cae73a7bead9d238bef16b763da1f42c@2?relay-protocol=irn&symKey=904e1bbe5a68d43dd945158f163b27da2ca2f468eb8d2aa0c09eea537664abff&expiryTimestamp=1776571946")
 
 console.log("Session paired")
 
-session.client.addEventListener("request", console.log)
+session.channel.addEventListener("request", console.log)
 
 await new Promise(resolve => setTimeout(resolve, 5000))
 
 console.log("Simulating disconnection...")
 
-session.client.irn.socket.close()
+session.channel.client.socket.close()
 
 console.log("Session disconnected")
 
@@ -101,7 +78,7 @@ const session2 = await resume(session)
 
 console.log("Session resumed")
 
-session2.client.addEventListener("request", console.log)
+session2.channel.addEventListener("request", console.log)
 
 await new Promise(resolve => setTimeout(resolve, 5000))
 
@@ -110,6 +87,6 @@ console.log("Closing session...")
 /**
  * Close the session
  */
-session2.close()
+await session2.delete()
 
 console.log("Session closed")

@@ -1,7 +1,8 @@
-import { SafeJson } from "@/libs/json/mod.ts"
-import { SafeRpc } from "@/libs/rpc/mod.ts"
-import { RpcErr, RpcError, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit } from "@hazae41/jsonrpc"
-import { DataRespondableEvent } from "@hazae41/plume"
+import { SafeJson } from "@/libs/json/mod.ts";
+import { SafeRpc } from "@/libs/rpc/mod.ts";
+import { Jwt } from "@/mods/jwt/mod.ts";
+import { RpcErr, RpcError, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { DataRespondableEvent } from "@hazae41/plume";
 
 export interface IrnPublishPayload {
   readonly topic: string
@@ -56,6 +57,27 @@ export class IrnClient extends EventTarget {
     socket.addEventListener("error", this.#onSocketError.bind(this), { signal })
   }
 
+  static async open(url: string, projectId: string, params: IrnClientParams = {}): Promise<IrnClient> {
+    using stack = new DisposableStack()
+
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
+
+    const jwk = crypto.getRandomValues(new Uint8Array(32))
+    const jwt = await Jwt.signOrThrow(jwk, url)
+
+    const socket = new WebSocket(`${url}/?auth=${jwt}&projectId=${projectId}`)
+
+    const { resolve, reject, promise } = Promise.withResolvers()
+
+    socket.addEventListener("open", resolve, { signal: cleaner.signal })
+    socket.addEventListener("error", reject, { signal: cleaner.signal })
+
+    await promise
+
+    return new IrnClient(socket, params)
+  }
+
   [Symbol.dispose]() {
     if (this.closed)
       return
@@ -80,6 +102,10 @@ export class IrnClient extends EventTarget {
 
   get closed() {
     return this.#closed
+  }
+
+  get relay() {
+    return { protocol: "irn" }
   }
 
   #onSocketClose(event: CloseEvent) {

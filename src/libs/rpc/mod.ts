@@ -14,14 +14,14 @@ export namespace SafeRpc {
   export async function requestOrThrow<T>(socket: WebSocket, init: RpcRequestPreinit<unknown>, signal = new AbortController().signal) {
     using stack = new DisposableStack()
 
-    const { reject, resolve, promise } = Promise.withResolvers<RpcResponse<T>>()
-
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
+    const { reject, resolve, promise } = Promise.withResolvers<RpcResponse<T>>()
+
     const request = SafeRpc.prepare(init)
 
-    const onMessage = async (event: MessageEvent<unknown>) => {
+    socket.addEventListener("message", async (event: MessageEvent<unknown>) => {
       if (typeof event.data !== "string")
         return
 
@@ -32,18 +32,19 @@ export namespace SafeRpc {
         return
 
       resolve(response)
-    }
+    }, { signal: cleaner.signal })
 
-    socket.addEventListener("message", onMessage, { signal: cleaner.signal })
+    socket.addEventListener("error", (cause: unknown) => {
+      reject(new Error("Errored", { cause }))
+    }, { signal: cleaner.signal })
 
-    const onError = (cause: unknown) => reject(new Error("Errored", { cause }))
-    socket.addEventListener("error", onError, { signal: cleaner.signal })
+    socket.addEventListener("close", (cause: unknown) => {
+      reject(new Error("Closed", { cause }))
+    }, { signal: cleaner.signal })
 
-    const onClose = (cause: unknown) => reject(new Error("Closed", { cause }))
-    socket.addEventListener("close", onClose, { signal: cleaner.signal })
-
-    const onAbort = () => reject(new Error("Aborted", { cause: signal.reason }))
-    signal.addEventListener("abort", onAbort, { signal: cleaner.signal })
+    signal.addEventListener("abort", () => {
+      reject(new Error("Aborted", { cause: signal.reason }))
+    }, { signal: cleaner.signal })
 
     socket.send(SafeJson.stringify(request))
 
