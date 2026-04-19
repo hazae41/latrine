@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
+import { Jwt } from "@/libs/jwt/mod.ts";
 import { CryptoChannel, RpcReceiptAndPromise } from "@/mods/crypto/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
@@ -146,6 +147,30 @@ export interface WcSettleParams {
 }
 
 export namespace WalletConnect {
+
+  export const RELAY = "wss://relay.walletconnect.org"
+
+  export async function open(projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
+    using stack = new DisposableStack()
+
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
+
+    const jwk = crypto.getRandomValues(new Uint8Array(32))
+    const jwt = await Jwt.signOrThrow(jwk, RELAY)
+
+    const socket = new WebSocket(`${RELAY}/?auth=${jwt}&projectId=${projectId}`)
+
+    const { resolve, reject, promise } = Promise.withResolvers()
+
+    socket.addEventListener("open", resolve, { signal: cleaner.signal })
+    socket.addEventListener("error", reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+
+    await promise
+
+    return new IrnClient(socket)
+  }
 
   export async function settle(client: IrnClient, params: WcSettleParams, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
     using stack = new DisposableStack()

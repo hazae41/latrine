@@ -1,6 +1,5 @@
-import { IrnClient } from "@/mod.ts";
 import { CryptoChannel } from "@/mods/mod.ts";
-import { Wc, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
+import { WalletConnect, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
 
@@ -30,9 +29,9 @@ const namespaces = {
 async function pair(url: string) {
   const pair = WcPairParams.parse(url)
 
-  const client = await IrnClient.open(Wc.RELAY, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open("b580c84c2c57b6e4f78ab117951de721")
 
-  const [session, settlement] = await Wc.settle(client, { pair, self, namespaces })
+  const [session, settlement] = await WalletConnect.settle(client, { pair, self, namespaces })
 
   console.log(session.settled)
 
@@ -42,7 +41,7 @@ async function pair(url: string) {
 }
 
 async function resume(stale: WcSession) {
-  const client = await IrnClient.open(Wc.RELAY, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open("b580c84c2c57b6e4f78ab117951de721")
 
   const channel = new CryptoChannel(client, stale.channel.topic, stale.channel.key)
 

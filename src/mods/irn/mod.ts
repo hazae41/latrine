@@ -1,5 +1,4 @@
 import { SafeJson } from "@/libs/json/mod.ts";
-import { Jwt } from "@/libs/jwt/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
 import { RpcErr, RpcError, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataRespondableEvent } from "@hazae41/plume";
@@ -55,28 +54,6 @@ export class IrnClient extends EventTarget {
     socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal })
     socket.addEventListener("close", this.#onSocketClose.bind(this), { signal })
     socket.addEventListener("error", this.#onSocketError.bind(this), { signal })
-  }
-
-  static async open(url = "wss://relay.walletconnect.org", projectId: string, params: IrnClientParams = {}, signal = new AbortController().signal): Promise<IrnClient> {
-    using stack = new DisposableStack()
-
-    const cleaner = new AbortController()
-    stack.defer(() => cleaner.abort())
-
-    const jwk = crypto.getRandomValues(new Uint8Array(32))
-    const jwt = await Jwt.signOrThrow(jwk, url)
-
-    const socket = new WebSocket(`${url}/?auth=${jwt}&projectId=${projectId}`)
-
-    const { resolve, reject, promise } = Promise.withResolvers()
-
-    socket.addEventListener("open", resolve, { signal: cleaner.signal })
-    socket.addEventListener("error", reject, { signal: cleaner.signal })
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
-
-    await promise
-
-    return new IrnClient(socket, params)
   }
 
   [Symbol.dispose]() {
