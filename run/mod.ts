@@ -35,7 +35,7 @@ async function pair(url: string) {
   const peer = WcPairParams.parse(url)
 
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
-  const pairing = await WalletConnect.pair(client, { self, peer, namespaces })
+  const pairing = await WalletConnect.respond(client, { self, peer, namespaces })
 
   pairing.addEventListener("proposal", (event) => event.respondWith(true))
 

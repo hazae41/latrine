@@ -218,7 +218,7 @@ export interface WcPairingEventMap {
   upgraded: DataExtendableEvent<WcSession>
 }
 
-export interface WcPairingParams {
+export interface WcResponderParams {
   readonly self: WcMetadata
   readonly peer: WcPairParams
 
@@ -230,14 +230,14 @@ export interface WcPairingParams {
   readonly expiry?: number
 }
 
-export class WcPairing extends EventTarget {
+export class WcResponder extends EventTarget {
 
   readonly #aborter = new AbortController()
 
   constructor(
     readonly channel: CryptoChannel,
     readonly keypair: CryptoKeyPair,
-    readonly params: WcPairingParams
+    readonly params: WcResponderParams
   ) {
     super()
 
@@ -387,13 +387,13 @@ export namespace WalletConnect {
     return new IrnClient(socket)
   }
 
-  export async function pair(client: IrnClient, params: WcPairingParams) {
+  export async function respond(client: IrnClient, params: WcResponderParams) {
     const { pairingTopic, symKey } = params.peer
 
     const channel = new CryptoChannel(client, pairingTopic, symKey)
     const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
-    return new WcPairing(channel, keypair, params)
+    return new WcResponder(channel, keypair, params)
   }
 
 }
