@@ -6,8 +6,9 @@ import { IrnSubscriptionPayload } from "@/mods/irn/mod.ts";
 import { IrnClient } from "@/mods/mod.ts";
 import { Readable, Unknown, Writable } from "@hazae41/binary";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
-import { RpcErr, RpcError, RpcId, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
+import { RpcId, RpcInvalidRequestError, RpcMessageInit, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
 import { DataExtendableEvent, DataRespondableEvent } from "@hazae41/plume";
+import { Result } from "@hazae41/result-and-option";
 
 export interface RpcOpts {
   readonly prompt: boolean
@@ -168,7 +169,7 @@ export class CryptoChannel extends EventTarget {
   }
 
   [Symbol.dispose]() {
-    this.#aborter.abort()
+    this.close()
   }
 
   addEventListener<K extends keyof CryptoClientEventMap>(type: K, listener: (e: CryptoClientEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -209,18 +210,21 @@ export class CryptoChannel extends EventTarget {
     const request = event.data
 
     if (request.method === "irn_subscription")
-      return this.#onIrnSubscription(event, request)
+      return this.#onIrnSubscription(event)
 
     return
   }
 
-  #onIrnSubscription(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>, request: RpcRequestPreinit<unknown>) {
-    const { data } = (request as RpcRequestPreinit<IrnSubscriptionPayload>).params
+  #onIrnSubscription(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<IrnSubscriptionPayload>
 
-    if (data.topic !== this.topic)
+    if (request.params.data.topic !== this.topic)
       return
 
-    event.respondWith(this.#onIrnMessage(data.message))
+    this.#onIrnMessage(request.params.data.message).catch(console.error)
+
+    event.stopImmediatePropagation()
+    event.respondWith(true)
   }
 
   async #onIrnMessage(message: string) {
@@ -238,7 +242,7 @@ export class CryptoChannel extends EventTarget {
     else
       await this.#onResponse(data)
 
-    return true
+    return
   }
 
   async #onRequest(request: RpcRequestInit<unknown>): Promise<void> {
@@ -249,7 +253,9 @@ export class CryptoChannel extends EventTarget {
 
     this.#acks.add(request.id)
 
-    const response = await this.#respond(request)
+    const result = await Result.runAndWrap(() => this.#respond(request))
+
+    const response = RpcResponse.rewrap(request.id, result)
 
     const { topic } = this
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[request.method].res
@@ -262,20 +268,16 @@ export class CryptoChannel extends EventTarget {
   }
 
   async #respond(request: RpcRequestInit<unknown>) {
-    try {
-      const event = new DataRespondableEvent("request", { data: request })
+    const event = new DataRespondableEvent("request", { data: request })
 
-      this.dispatchEvent(event)
+    this.dispatchEvent(event)
 
-      await event.extension
+    await event.extension
 
-      if (event.response != null)
-        return new RpcOk(request.id, await event.response)
+    if (event.response != null)
+      return await event.response
 
-      return new RpcErr(request.id, new RpcInvalidRequestError())
-    } catch (e: unknown) {
-      return new RpcErr(request.id, RpcError.rewrap(e))
-    }
+    throw new RpcInvalidRequestError()
   }
 
   async #onResponse(response: RpcResponseInit<unknown>) {
@@ -360,7 +362,13 @@ export class CryptoChannel extends EventTarget {
   }
 
   close(reason?: string) {
-    this.client.close(reason)
+    this.#aborter.abort()
+
+    this.#closed = { reason }
+
+    const subevent = new CloseEvent("close", { reason })
+
+    this.dispatchEvent(subevent)
   }
 
 }

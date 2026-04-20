@@ -1,7 +1,8 @@
 import { SafeJson } from "@/libs/json/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
-import { RpcErr, RpcError, RpcInvalidRequestError, RpcMessageInit, RpcOk, RpcRequestInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { RpcInvalidRequestError, RpcMessageInit, RpcRequestInit, RpcRequestPreinit, RpcResponse } from "@hazae41/jsonrpc";
 import { DataRespondableEvent } from "@hazae41/plume";
+import { Result } from "@hazae41/result-and-option";
 
 export interface IrnPublishPayload {
   readonly topic: string
@@ -52,7 +53,7 @@ export class IrnClient extends EventTarget {
   }
 
   [Symbol.dispose]() {
-    this.#aborter.abort()
+    this.close()
   }
 
   addEventListener<K extends keyof IrnClientEventMap>(type: K, listener: (e: IrnClientEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -106,24 +107,24 @@ export class IrnClient extends EventTarget {
   }
 
   async #onRequest(request: RpcRequestInit<unknown>) {
-    this.socket.send(SafeJson.stringify(await this.#respond(request)))
+    const result = await Result.runAndWrap(() => this.#respond(request))
+
+    const response = RpcResponse.rewrap(request.id, result)
+
+    this.socket.send(SafeJson.stringify(response))
   }
 
   async #respond(request: RpcRequestInit<unknown>) {
-    try {
-      const event = new DataRespondableEvent("request", { data: request })
+    const event = new DataRespondableEvent("request", { data: request })
 
-      this.dispatchEvent(event)
+    this.dispatchEvent(event)
 
-      await event.extension
+    await event.extension
 
-      if (event.response != null)
-        return new RpcOk(request.id, await event.response)
+    if (event.response != null)
+      return await event.response
 
-      return new RpcErr(request.id, new RpcInvalidRequestError())
-    } catch (e: unknown) {
-      return new RpcErr(request.id, RpcError.rewrap(e))
-    }
+    throw new RpcInvalidRequestError()
   }
 
   async subscribe(topic: string, signal = new AbortController().signal): Promise<void> {
