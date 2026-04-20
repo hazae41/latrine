@@ -13,10 +13,10 @@ export interface IrnPublishPayload {
 
 export interface IrnSubscriptionPayload {
   readonly id: string
-  readonly data: IrnSubscriptionPayloadData
+  readonly data: IrnMessage
 }
 
-export interface IrnSubscriptionPayloadData {
+export interface IrnMessage {
   readonly topic: string
   readonly message: string
   readonly publishedAt: number
@@ -126,35 +126,59 @@ export class IrnClient extends EventTarget {
     }
   }
 
-  async subscribe(topic: string, signal = new AbortController().signal): Promise<string> {
+  async subscribe(topic: string, signal = new AbortController().signal): Promise<void> {
     const subsignal = AbortSignal.any([signal, this.#aborter.signal])
 
-    const subscription = await SafeRpc.requestOrThrow<string>(this.socket, {
+    const id = await SafeRpc.requestOrThrow<string>(this.socket, {
       method: "irn_subscribe",
       params: { topic }
     }, subsignal).then(r => r.getOrThrow())
 
-    this.#topics.set(subscription, topic)
-
-    return subscription
+    this.#topics.set(topic, id)
   }
 
-  async unsubscribe(subscription: string, signal = new AbortController().signal): Promise<void> {
-    // TODO
+  async unsubscribe(topic: string, signal = new AbortController().signal): Promise<void> {
+    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
+
+    const id = this.#topics.get(topic)
+
+    if (id == null)
+      return
+
+    await SafeRpc.requestOrThrow<true>(this.socket, {
+      method: "irn_unsubscribe",
+      params: { id, topic }
+    }, subsignal).then(r => r.getOrThrow())
+
+    this.#topics.delete(topic)
+  }
+
+  async* fetch(topic: string, signal = new AbortController().signal): AsyncGenerator<IrnMessage> {
+    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
+
+    while (true) {
+      const data = await SafeRpc.requestOrThrow<{ messages: IrnMessage[], hasMore: boolean }>(this.socket, {
+        method: "irn_fetchMessages",
+        params: { topic }
+      }, subsignal).then(r => r.getOrThrow())
+
+      for (const message of data.messages)
+        yield message
+
+      if (!data.hasMore)
+        break
+
+      continue
+    }
   }
 
   async publish(payload: IrnPublishPayload, signal = new AbortController().signal): Promise<void> {
     const subsignal = AbortSignal.any([signal, this.#aborter.signal])
 
-    const result = await SafeRpc.requestOrThrow<boolean>(this.socket, {
+    await SafeRpc.requestOrThrow<true>(this.socket, {
       method: "irn_publish",
       params: payload
     }, subsignal).then(r => r.getOrThrow())
-
-    if (!result)
-      throw new Error("Failed to publish")
-
-    return
   }
 
   close(reason?: string) {

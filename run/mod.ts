@@ -28,26 +28,24 @@ const namespaces = {
   }
 }
 
+const jwk = crypto.getRandomValues(new Uint8Array(32))
+
 async function pair(url: string) {
   const pair = WcPairParams.parse(url)
 
-  const client = await WalletConnect.open("b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
 
-  const [session, settlement] = await WalletConnect.settle(client, { pair, self, namespaces })
+  const settlement = WalletConnect.settle(client, { pair, self, namespaces })
 
-  console.log(session.settled)
+  const { value: session } = await settlement.next()
 
-  await settlement.promise
-
-  return session
+  await settlement.next()
 }
 
 async function resume(stale: WcSession) {
-  const client = await WalletConnect.open("b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
 
   const channel = new CryptoChannel(client, stale.channel.topic, stale.channel.key)
-
-  await channel.subscribe()
 
   return new WcSession(channel, stale.settled)
 }
@@ -78,6 +76,8 @@ const session2 = await resume(session)
 console.log("Session resumed")
 
 session2.channel.addEventListener("request", e => console.log(e.data))
+
+await session2.channel.fetch()
 
 // await new Promise(resolve => setTimeout(resolve, 5000))
 

@@ -2,7 +2,7 @@
 
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
-import { CryptoChannel, RpcReceiptAndPromise } from "@/mods/crypto/mod.ts";
+import { CryptoChannel } from "@/mods/crypto/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataRespondableEvent } from "@hazae41/plume";
@@ -162,6 +162,28 @@ export namespace WcPairParams {
 
 }
 
+export interface WcPairingEventMap {
+  proposal: DataRespondableEvent<WcSessionProposeParams, boolean>
+}
+
+export class WcPairing extends EventTarget {
+
+  constructor(
+    readonly channel: CryptoChannel,
+  ) {
+    super()
+  }
+
+  addEventListener<K extends keyof WcPairingEventMap>(type: K, listener: (e: WcPairingEventMap[K]) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+
+  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+    super.addEventListener(type, callback, options)
+  }
+
+}
+
 export interface WcSettleParams {
   readonly self: WcMetadata
   readonly pair: WcPairParams
@@ -178,13 +200,12 @@ export namespace WalletConnect {
 
   export const RELAY = "wss://relay.walletconnect.org"
 
-  export async function open(projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
+  export async function open(jwk: Uint8Array<ArrayBuffer, 32>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const jwk = crypto.getRandomValues(new Uint8Array(32))
     const jwt = await Jwt.signOrThrow(jwk, RELAY)
 
     const socket = new WebSocket(`${RELAY}/?auth=${jwt}&projectId=${projectId}`)
@@ -200,7 +221,7 @@ export namespace WalletConnect {
     return new IrnClient(socket)
   }
 
-  export async function settle(client: IrnClient, params: WcSettleParams, signal = new AbortController().signal): Promise<[WcSession, RpcReceiptAndPromise<boolean>]> {
+  export async function* settle(client: IrnClient, params: WcSettleParams, signal = new AbortController().signal) {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -217,7 +238,7 @@ export namespace WalletConnect {
 
     const pairing = new CryptoChannel(client, pairingTopic, symKey)
 
-    const { resolve, reject, promise } = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
+    const preproposal = Promise.withResolvers<RpcRequestPreinit<WcSessionProposeParams>>()
 
     pairing.addEventListener("request", (event) => {
       const request = event.data
@@ -225,16 +246,16 @@ export namespace WalletConnect {
       if (request.method !== "wc_sessionPropose")
         return
 
-      resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
+      preproposal.resolve(request as RpcRequestPreinit<WcSessionProposeParams>)
 
       event.respondWith({ relay, responderPublicKey: selfPubHex })
     }, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", preproposal.reject, { signal: cleaner.signal })
 
     await pairing.subscribe(signal)
 
-    const proposal = await promise
+    const proposal = await preproposal.promise
 
     const peerPubRaw = Uint8Array.fromHex(proposal.params.proposer.publicKey)
     const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
@@ -248,8 +269,6 @@ export namespace WalletConnect {
 
     const settling = new CryptoChannel(client, sessionTpcHex, sessionKeyRaw)
 
-    await settling.subscribe(signal)
-
     const { self } = params
 
     const peer = proposal.params.proposer.metadata
@@ -261,13 +280,20 @@ export namespace WalletConnect {
 
     const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = params
 
-    const controller = { publicKey: selfPubHex, metadata: self }
-
-    const settlement = await settling.request<boolean>({ method: "wc_sessionSettle", params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic, controller, expiry } })
-
     const session = new WcSession(settling, { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry })
 
-    return [session, settlement]
+    yield session
+
+    await settling.subscribe(signal)
+
+    const controller = { publicKey: selfPubHex, metadata: self }
+
+    await settling.request<true>({
+      method: "wc_sessionSettle",
+      params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic, controller, expiry }
+    }).then(r => r.getOrThrow())
+
+    return session
   }
 
 }

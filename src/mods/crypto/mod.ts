@@ -220,10 +220,10 @@ export class CryptoChannel extends EventTarget {
     if (data.topic !== this.topic)
       return
 
-    return event.respondWith(this.#onIrnMessage(data.message))
+    event.respondWith(this.#onIrnMessage(data.message))
   }
 
-  async #onIrnMessage(message: string): Promise<true> {
+  async #onIrnMessage(message: string) {
     const written = Uint8Array.fromBase64(message)
     const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
 
@@ -234,9 +234,9 @@ export class CryptoChannel extends EventTarget {
     const data = SafeJson.parse(json) as RpcMessageInit
 
     if ("method" in data)
-      this.#onRequest(data).catch(console.error)
+      await this.#onRequest(data)
     else
-      this.#onResponse(data).catch(console.error)
+      await this.#onResponse(data)
 
     return true
   }
@@ -306,7 +306,16 @@ export class CryptoChannel extends EventTarget {
     await this.client.subscribe(this.topic, signal)
   }
 
-  async request<T>(init: RpcRequestPreinit<unknown>): Promise<RpcReceiptAndPromise<T>> {
+  async fetch(signal = new AbortController().signal) {
+    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
+
+    for await (const data of this.client.fetch(this.topic, subsignal))
+      await this.#onIrnMessage(data.message)
+
+    return
+  }
+
+  async request<T>(init: RpcRequestPreinit<unknown>): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
     const { topic } = this
@@ -317,16 +326,16 @@ export class CryptoChannel extends EventTarget {
     const end = Date.now() + (ttl * 1000)
 
     const receipt = { id, end }
-    const promise = this.wait<T>(receipt)
+    const promise = this.#wait<T>(receipt)
 
     const payload = { topic, message, prompt, tag, ttl }
 
     await this.client.publish(payload)
 
-    return { receipt, promise }
+    return await promise
   }
 
-  async wait<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
+  async #wait<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
