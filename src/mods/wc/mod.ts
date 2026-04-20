@@ -15,35 +15,34 @@ export interface WcMetadata {
   readonly icons: string[]
 }
 
+export interface WcRelay {
+  readonly protocol: string
+}
+
 export interface WcSessionProposeParams {
   readonly proposer: {
-    /**
-     * base16
-     */
     readonly publicKey: string
     readonly metadata: WcMetadata
   }
 
-  readonly relays: {
-    readonly protocol: string
-  }[]
+  readonly relays: WcRelay[]
 
   readonly requiredNamespaces: any
   readonly optionalNamespaces: any
 }
 
+export interface WcSessionProposeResult {
+  readonly relay: WcRelay
+  readonly responderPublicKey: string
+}
+
 export interface WcSessionSettleParams {
   readonly controller: {
-    /**
-     * base16
-     */
     readonly publicKey: string
     readonly metadata: WcMetadata
   }
 
-  readonly relay: {
-    readonly protocol: string
-  }
+  readonly relay: WcRelay
 
   readonly namespaces: any
   readonly requiredNamespaces: any
@@ -54,9 +53,6 @@ export interface WcSessionSettleParams {
 }
 
 export interface WcSessionRequestParams<T = unknown> {
-  /**
-   * namespace:decimal
-   */
   readonly chainId: `${string}:${string}`
   readonly request: RpcRequestPreinit<T>
 }
@@ -75,7 +71,10 @@ export interface WcSessionData {
 }
 
 export interface WcSessionEventMap {
-  settled: Event,
+  error: Event
+
+  close: CloseEvent
+
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 }
 
