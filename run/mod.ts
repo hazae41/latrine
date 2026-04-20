@@ -29,9 +29,39 @@ const namespaces = {
   }
 }
 
+const optionalNamespaces = {
+  eip155: {
+    chains: ["eip155:1"],
+    methods: ["eth_sendTransaction", "personal_sign"],
+    events: ["chainChanged", "accountsChanged"]
+  }
+}
+
 const jwk = crypto.getRandomValues(new Uint8Array(32))
 
-async function pair(url: string) {
+async function propose() {
+  const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
+
+  const pairing = await WalletConnect.propose(client, { self, optionalNamespaces })
+
+  console.log(pairing.url)
+
+  await pairing.subscribe()
+
+  await pairing.fetch()
+
+  const session = await pairing.propose()
+
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
+
+  await session.subscribe()
+
+  await session.fetch()
+
+  return session
+}
+
+async function respond(url: string) {
   const peer = WcPairParams.parse(url)
 
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
@@ -49,7 +79,7 @@ async function pair(url: string) {
 
   const session = await upgrade.promise
 
-  session.addEventListener("request", event => event.respondWith(respond(event.data.request)))
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
   await session.subscribe()
 
@@ -67,14 +97,14 @@ async function resume(stale: WcSession) {
 
   const session = new WcSession(channel, stale.session)
 
-  session.addEventListener("request", event => event.respondWith(respond(event.data.request)))
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
   await session.subscribe()
 
   await session.fetch()
 }
 
-async function respond(request: RpcRequestPreinit<unknown>) {
+async function onrequest(request: RpcRequestPreinit<unknown>) {
   const { method, params } = request
 
   console.log(method, params)
@@ -90,7 +120,7 @@ console.log("Pairing...")
 /**
  * Start by pairing
  */
-const session = await pair(process.argv[2])
+const session = process.argv[2] ? await respond(process.argv[2]) : await propose()
 
 console.log("Session paired")
 
