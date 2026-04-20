@@ -317,6 +317,24 @@ export class CryptoChannel extends EventTarget {
     return
   }
 
+  async publish(init: RpcRequestPreinit<unknown>) {
+    const request = SafeRpc.prepare(init)
+
+    const { topic } = this
+    const message = this.#encryptOrThrow(request)
+    const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
+
+    const { id } = request
+    const end = Date.now() + (ttl * 1000)
+
+    const receipt = { id, end }
+    const payload = { topic, message, prompt, tag, ttl }
+
+    await this.client.publish(payload)
+
+    return receipt
+  }
+
   async request<T>(init: RpcRequestPreinit<unknown>): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
@@ -328,16 +346,16 @@ export class CryptoChannel extends EventTarget {
     const end = Date.now() + (ttl * 1000)
 
     const receipt = { id, end }
-    const promise = this.#wait<T>(receipt)
-
     const payload = { topic, message, prompt, tag, ttl }
+
+    const promise = this.wait<T>(receipt)
 
     await this.client.publish(payload)
 
     return await promise
   }
 
-  async #wait<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
+  async wait<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()

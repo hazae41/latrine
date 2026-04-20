@@ -4,6 +4,7 @@ import { CryptoChannel } from "@/mods/mod.ts";
 import { WalletConnect, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
+import { RpcMethodNotFoundError, RpcRequestPreinit } from "@hazae41/jsonrpc";
 
 await chaCha20Poly1305Wasm.load()
 
@@ -48,7 +49,7 @@ async function pair(url: string) {
 
   const session = await upgrade.promise
 
-  session.addEventListener("request", e => console.log(e.data))
+  session.addEventListener("request", event => event.respondWith(respond(event.data.request)))
 
   await session.subscribe()
 
@@ -66,18 +67,22 @@ async function resume(stale: WcSession) {
 
   const session = new WcSession(channel, stale.session)
 
-  session.addEventListener("request", event => {
-    const { method, params } = event.data.request
-
-    console.log(method, params)
-
-    event.stopImmediatePropagation()
-    event.respondWith("0x4d7920656d61696c206973206a6f686e40646f652e636f6d202d2031373736373030303335353530")
-  })
+  session.addEventListener("request", event => event.respondWith(respond(event.data.request)))
 
   await session.subscribe()
 
   await session.fetch()
+}
+
+async function respond(request: RpcRequestPreinit<unknown>) {
+  const { method, params } = request
+
+  console.log(method, params)
+
+  if (method === "personal_sign")
+    return "0x4d7920656d61696c206973206a6f686e40646f652e636f6d202d2031373736373030303335353530"
+
+  throw new RpcMethodNotFoundError()
 }
 
 console.log("Pairing...")

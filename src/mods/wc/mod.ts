@@ -144,14 +144,12 @@ export class WcSession extends EventTarget {
     }).then(r => r.getOrThrow())
   }
 
+  async delete(): Promise<void> {
+    const params = { code: 6000, message: "User disconnected." }
 
-  async delete(reason?: string): Promise<void> {
-    await this.channel.request({
-      method: "wc_sessionDelete",
-      params: { code: 6000, message: "User disconnected." }
-    }).then(r => r.getOrThrow())
+    await this.channel.publish({ method: "wc_sessionDelete", params })
 
-    this.channel.close(reason)
+    this.channel.close()
   }
 
 }
