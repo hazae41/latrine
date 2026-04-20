@@ -89,6 +89,9 @@ export class WcSession extends EventTarget {
   ) {
     super()
 
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.#aborter.signal })
+    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.#aborter.signal })
+
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.#aborter.signal })
   }
 
@@ -106,6 +109,24 @@ export class WcSession extends EventTarget {
 
   get closed() {
     return this.channel.closed
+  }
+
+  #onChannelClose(event: CloseEvent) {
+    const { reason } = event
+
+    this.#aborter.abort()
+
+    const subevent = new CloseEvent("close", { reason })
+
+    this.dispatchEvent(subevent)
+  }
+
+  #onChannelError() {
+    this.#aborter.abort()
+
+    const subevent = new Event("error")
+
+    this.dispatchEvent(subevent)
   }
 
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -227,6 +248,9 @@ export class WcPairing extends EventTarget {
   ) {
     super()
 
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.#aborter.signal })
+    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.#aborter.signal })
+
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.#aborter.signal })
   }
 
@@ -240,6 +264,24 @@ export class WcPairing extends EventTarget {
 
   get closed() {
     return this.channel.closed
+  }
+
+  #onChannelClose(event: CloseEvent) {
+    const { reason } = event
+
+    this.#aborter.abort()
+
+    const subevent = new CloseEvent("close", { reason })
+
+    this.dispatchEvent(subevent)
+  }
+
+  #onChannelError() {
+    this.#aborter.abort()
+
+    const subevent = new Event("error")
+
+    this.dispatchEvent(subevent)
   }
 
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {

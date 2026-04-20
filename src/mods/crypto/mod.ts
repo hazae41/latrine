@@ -165,6 +165,7 @@ export class CryptoChannel extends EventTarget {
 
     client.addEventListener("close", this.#onClientClose.bind(this), { signal })
     client.addEventListener("error", this.#onClientError.bind(this), { signal })
+
     client.addEventListener("request", this.#onClientRequest.bind(this), { signal })
   }
 
