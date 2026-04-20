@@ -150,6 +150,8 @@ export class CryptoChannel extends EventTarget {
 
   #closed?: { reason?: unknown }
 
+  #id?: string
+
   constructor(
     readonly client: IrnClient,
     readonly topic: string,
@@ -306,7 +308,19 @@ export class CryptoChannel extends EventTarget {
   }
 
   async subscribe(signal = new AbortController().signal) {
-    await this.client.subscribe(this.topic, signal)
+    if (this.closed)
+      return
+    if (this.#id != null)
+      return
+    this.#id = await this.client.subscribe(this.topic, AbortSignal.any([signal, this.#aborter.signal]))
+  }
+
+  async unsubscribe(signal = new AbortController().signal) {
+    if (this.closed)
+      return
+    if (this.#id == null)
+      return
+    await this.client.unsubscribe(this.#id, this.topic, AbortSignal.any([signal, this.#aborter.signal]))
   }
 
   async fetch(signal = new AbortController().signal) {
@@ -380,7 +394,12 @@ export class CryptoChannel extends EventTarget {
     return await promise
   }
 
-  close(reason?: string) {
+  async close(reason?: string) {
+    if (this.closed)
+      return
+
+    await this.unsubscribe()
+
     this.#aborter.abort()
 
     this.#closed = { reason }

@@ -95,10 +95,6 @@ export class WcSession extends EventTarget {
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.#aborter.signal })
   }
 
-  [Symbol.dispose]() {
-    this.channel.close()
-  }
-
   addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
 
   addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
@@ -150,19 +146,16 @@ export class WcSession extends EventTarget {
     event.respondWith(subevent.response)
   }
 
-  async subscribe() {
-    await this.channel.subscribe()
+  async subscribe(signal = new AbortController().signal) {
+    await this.channel.subscribe(signal)
   }
 
-  async fetch() {
-    await this.channel.fetch()
+  async fetch(signal = new AbortController().signal) {
+    await this.channel.fetch(signal)
   }
 
   async settle() {
-    await this.channel.request<true>({
-      method: "wc_sessionSettle",
-      params: this.session.settle
-    }).then(r => r.getOrThrow())
+    await this.channel.publish({ method: "wc_sessionSettle", params: this.session.settle })
   }
 
   async delete(): Promise<void> {
@@ -170,7 +163,7 @@ export class WcSession extends EventTarget {
 
     await this.channel.publish({ method: "wc_sessionDelete", params })
 
-    this.channel.close()
+    await this.channel.close()
   }
 
 }
@@ -359,12 +352,12 @@ export class WcPairing extends EventTarget {
     await upgraded.extension
   }
 
-  async subscribe() {
-    await this.channel.subscribe()
+  async subscribe(signal = new AbortController().signal) {
+    await this.channel.subscribe(signal)
   }
 
-  async fetch() {
-    await this.channel.fetch()
+  async fetch(signal = new AbortController().signal) {
+    await this.channel.fetch(signal)
   }
 
 }

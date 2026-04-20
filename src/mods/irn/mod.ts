@@ -127,7 +127,7 @@ export class IrnClient extends EventTarget {
     throw new RpcInvalidRequestError()
   }
 
-  async subscribe(topic: string, signal = new AbortController().signal): Promise<void> {
+  async subscribe(topic: string, signal = new AbortController().signal): Promise<string> {
     const subsignal = AbortSignal.any([signal, this.#aborter.signal])
 
     const id = await SafeRpc.requestOrThrow<string>(this.socket, {
@@ -135,23 +135,18 @@ export class IrnClient extends EventTarget {
       params: { topic }
     }, subsignal).then(r => r.getOrThrow())
 
-    this.#topics.set(topic, id)
+    return id
   }
 
-  async unsubscribe(topic: string, signal = new AbortController().signal): Promise<void> {
+  async unsubscribe(id: string, topic: string, signal = new AbortController().signal): Promise<void> {
     const subsignal = AbortSignal.any([signal, this.#aborter.signal])
-
-    const id = this.#topics.get(topic)
-
-    if (id == null)
-      return
 
     await SafeRpc.requestOrThrow<true>(this.socket, {
       method: "irn_unsubscribe",
       params: { id, topic }
     }, subsignal).then(r => r.getOrThrow())
 
-    this.#topics.delete(topic)
+    return
   }
 
   async* fetch(topic: string, signal = new AbortController().signal): AsyncGenerator<IrnMessage> {
