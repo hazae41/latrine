@@ -1,5 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
-
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
 import { CryptoChannel } from "@/mods/crypto/mod.ts";
@@ -30,8 +28,8 @@ export interface WcSessionProposeParams {
 
   readonly proposer: WcIdentity
 
-  readonly requiredNamespaces: any
-  readonly optionalNamespaces: any
+  readonly requiredNamespaces: unknown
+  readonly optionalNamespaces: unknown
 }
 
 export interface WcSessionProposeResult {
@@ -44,9 +42,10 @@ export interface WcSessionSettleParams {
 
   readonly controller: WcIdentity
 
-  readonly namespaces: any
-  readonly requiredNamespaces: any
-  readonly optionalNamespaces: any
+  readonly namespaces: unknown
+
+  readonly requiredNamespaces: unknown
+  readonly optionalNamespaces: unknown
 
   readonly pairingTopic: string
   readonly expiry: number
