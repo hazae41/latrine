@@ -448,10 +448,7 @@ export class WcProposer extends EventTarget {
 
     const relays = [this.channel.client.relay]
 
-    const response = await this.channel.request<{
-      relay: { protocol: string }
-      responderPublicKey: string
-    }>({
+    const response = await this.channel.request<WcSessionProposeResult>({
       method: "wc_sessionPropose",
       params: { proposer, relays, requiredNamespaces, optionalNamespaces }
     }).then(r => r.getOrThrow())
@@ -477,6 +474,9 @@ export class WcProposer extends EventTarget {
         return
 
       resolve(request.params as WcSessionSettleParams)
+
+      event.stopImmediatePropagation()
+      event.respondWith(true)
     })
 
     await channel.subscribe()
