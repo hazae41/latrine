@@ -1,7 +1,8 @@
 // deno-lint-ignore-file no-unused-vars no-process-global
 
-import { CryptoChannel } from "@/mods/mod.ts";
-import { WalletConnect, WcPairParams, WcSession } from "@/mods/wc/mod.ts";
+import { CryptoChannel } from "@/mods/crypto/mod.ts";
+import { WalletConnect, WcPairParams } from "@/mods/wc/mod.ts";
+import { WcSession } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
 import { RpcMethodNotFoundError, RpcRequestPreinit } from "@hazae41/jsonrpc";
