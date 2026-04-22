@@ -14,6 +14,8 @@ export interface WcEventAndChain {
 }
 
 export interface WcSessionEventMap {
+  ping: Event
+
   error: Event
 
   close: CloseEvent
@@ -96,6 +98,10 @@ export class WcSession extends EventTarget {
   }
 
   #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const subevent = new Event("ping")
+
+    this.dispatchEvent(subevent)
+
     event.stopImmediatePropagation()
     event.respondWith(true)
   }
