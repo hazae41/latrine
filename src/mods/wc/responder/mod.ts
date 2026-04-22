@@ -113,43 +113,39 @@ export class WcResponder extends EventTarget {
 
     resolve({ relay, responderPublicKey: selfPubHex })
 
-    {
-      const peerPubRaw = Uint8Array.fromHex(request.params.proposer.publicKey)
-      const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
+    const peerPubRaw = Uint8Array.fromHex(request.params.proposer.publicKey)
+    const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
 
-      const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, this.keypair.privateKey, 256))
-      const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
-      const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
+    const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, this.keypair.privateKey, 256))
+    const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
+    const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-      const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
-      const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
+    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+    const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-      const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
+    const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
-      this.dispatchEvent(new DataEvent("upgraded", { data: session }))
+    this.dispatchEvent(new DataEvent("upgraded", { data: session }))
 
-      {
-        const peer = request.params.proposer.metadata
+    const peer = request.params.proposer.metadata
 
-        const { self } = this.params
+    const { self } = this.params
 
-        const { namespaces } = this.params
+    const { namespaces } = this.params
 
-        const { requiredNamespaces = request.params.requiredNamespaces } = this.params
-        const { optionalNamespaces = request.params.optionalNamespaces } = this.params
+    const { requiredNamespaces = request.params.requiredNamespaces } = this.params
+    const { optionalNamespaces = request.params.optionalNamespaces } = this.params
 
-        const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = this.params
+    const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = this.params
 
-        const controller = { publicKey: selfPubHex, metadata: self }
+    const controller = { publicKey: selfPubHex, metadata: self }
 
-        await session.channel.request({
-          method: "wc_sessionSettle",
-          params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
-        }).then(r => r.getOrThrow())
+    await session.channel.request({
+      method: "wc_sessionSettle",
+      params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
+    }).then(r => r.getOrThrow())
 
-        session.dispatchEvent(new DataEvent("settled", { data: { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
-      }
-    }
+    session.dispatchEvent(new DataEvent("settled", { data: { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
   }
 
   async subscribe() {
