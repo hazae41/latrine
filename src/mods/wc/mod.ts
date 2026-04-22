@@ -1,7 +1,12 @@
+export * from "./channel/mod.ts";
+export * from "./proposer/mod.ts";
+export * from "./responder/mod.ts";
+export * from "./session/mod.ts";
+
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
-import { WcChannel } from "@/mods/crypto/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
+import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcProposer, WcProposerParams } from "@/mods/wc/proposer/mod.ts";
 import { WcResponder, WcResponderParams } from "@/mods/wc/responder/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
