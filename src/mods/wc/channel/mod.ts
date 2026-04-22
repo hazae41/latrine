@@ -117,12 +117,6 @@ export const ENGINE_RPC_OPTS: Record<string, { req: RpcOpts, res: RpcOpts }> = {
 
 export interface RpcReceipt {
   readonly id: RpcId
-
-  /**
-   * Absolute ttl in milliseconds
-   * = (Date.now() + (ttl * 1000))
-   */
-  readonly end: number
 }
 
 export interface RpcReceiptAndPromise<T> {
@@ -327,9 +321,8 @@ export class WcChannel extends EventTarget {
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
 
     const { id } = request
-    const end = Date.now() + (ttl * 1000)
 
-    const receipt = { id, end }
+    const receipt = { id }
     const payload = { topic, message, prompt, tag, ttl }
 
     const promise = this.wait<T>(receipt, signal)
@@ -347,9 +340,8 @@ export class WcChannel extends EventTarget {
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
 
     const { id } = request
-    const end = Date.now() + (ttl * 1000)
 
-    const receipt = { id, end }
+    const receipt = { id }
     const payload = { topic, message, prompt, tag, ttl }
 
     await this.client.publish(payload)
@@ -363,8 +355,6 @@ export class WcChannel extends EventTarget {
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const timeout = AbortSignal.timeout(receipt.end - Date.now())
-
     const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
 
     this.addEventListener("response", (event: DataEvent<RpcResponseInit<unknown>>) => {
@@ -377,8 +367,6 @@ export class WcChannel extends EventTarget {
     }, { signal: cleaner.signal })
 
     this.addEventListener("close", reject, { signal: cleaner.signal })
-
-    timeout.addEventListener("abort", reject, { signal: cleaner.signal })
 
     signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
