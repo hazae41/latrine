@@ -148,8 +148,6 @@ export class CryptoChannel extends EventTarget {
 
   #acks = new Set<number>()
 
-  #closed?: { reason?: unknown }
-
   #id?: string
 
   constructor(
@@ -184,15 +182,13 @@ export class CryptoChannel extends EventTarget {
   }
 
   get closed() {
-    return this.#closed
+    return this.#aborter.signal
   }
 
   #onClientClose(event: CloseEvent) {
     const { reason } = event
 
     this.#aborter.abort()
-
-    this.#closed = { reason }
 
     const subevent = new CloseEvent("close", { reason })
 
@@ -201,8 +197,6 @@ export class CryptoChannel extends EventTarget {
 
   #onClientError() {
     this.#aborter.abort()
-
-    this.#closed = {}
 
     const subevent = new Event("error")
 
@@ -307,28 +301,25 @@ export class CryptoChannel extends EventTarget {
     return message
   }
 
-  async subscribe(signal = new AbortController().signal) {
-    if (this.closed)
+  async subscribe() {
+    if (this.closed.aborted)
       return
     if (this.#id != null)
       return
-    this.#id = await this.client.subscribe(this.topic, AbortSignal.any([signal, this.#aborter.signal]))
+    this.#id = await this.client.subscribe(this.topic)
   }
 
-  async unsubscribe(signal = new AbortController().signal) {
-    if (this.closed)
+  async unsubscribe() {
+    if (this.closed.aborted)
       return
     if (this.#id == null)
       return
-    await this.client.unsubscribe(this.#id, this.topic, AbortSignal.any([signal, this.#aborter.signal]))
+    await this.client.unsubscribe(this.#id, this.topic)
   }
 
-  async fetch(signal = new AbortController().signal) {
-    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
-
-    for await (const data of this.client.fetch(this.topic, subsignal))
+  async fetch() {
+    for await (const data of this.client.fetch(this.topic))
       await this.#onIrnMessage(data.message)
-
     return
   }
 
@@ -350,7 +341,7 @@ export class CryptoChannel extends EventTarget {
     return receipt
   }
 
-  async request<T>(init: RpcRequestPreinit<unknown>): Promise<RpcResponse<T>> {
+  async request<T>(init: RpcRequestPreinit<unknown>, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
     const { topic } = this
@@ -363,22 +354,20 @@ export class CryptoChannel extends EventTarget {
     const receipt = { id, end }
     const payload = { topic, message, prompt, tag, ttl }
 
-    const promise = this.wait<T>(receipt)
+    const promise = this.wait<T>(receipt, signal)
 
     await this.client.publish(payload)
 
     return await promise
   }
 
-  async wait<T>(receipt: RpcReceipt): Promise<RpcResponse<T>> {
+  async wait<T>(receipt: RpcReceipt, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
     const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
-
-    const signal = AbortSignal.timeout(receipt.end - Date.now())
 
     this.addEventListener("response", (event: DataExtendableEvent<RpcResponseInit<unknown>>) => {
       const init = event.data as RpcResponseInit<T>
@@ -389,20 +378,20 @@ export class CryptoChannel extends EventTarget {
       resolve(RpcResponse.from<T>(init))
     }, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+    const timeout = AbortSignal.timeout(receipt.end - Date.now())
+
+    const subsignal = AbortSignal.any([signal, timeout, this.closed])
+    subsignal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     return await promise
   }
 
   async close(reason?: string) {
-    if (this.closed)
+    if (this.closed.aborted)
       return
-
     await this.unsubscribe()
 
     this.#aborter.abort()
-
-    this.#closed = { reason }
 
     const subevent = new CloseEvent("close", { reason })
 

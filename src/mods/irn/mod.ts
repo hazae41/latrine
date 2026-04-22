@@ -36,10 +36,6 @@ export class IrnClient extends EventTarget {
 
   readonly #aborter = new AbortController()
 
-  readonly #topics = new Map<string, string>()
-
-  #closed?: { reason?: unknown }
-
   constructor(
     readonly socket: WebSocket
   ) {
@@ -65,7 +61,7 @@ export class IrnClient extends EventTarget {
   }
 
   get closed() {
-    return this.#closed
+    return this.#aborter.signal
   }
 
   get relay() {
@@ -77,8 +73,6 @@ export class IrnClient extends EventTarget {
 
     this.#aborter.abort()
 
-    this.#closed = { reason }
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
@@ -86,8 +80,6 @@ export class IrnClient extends EventTarget {
 
   #onSocketError() {
     this.#aborter.abort()
-
-    this.#closed = {}
 
     const subevent = new Event("error")
 
@@ -127,36 +119,26 @@ export class IrnClient extends EventTarget {
     throw new RpcInvalidRequestError()
   }
 
-  async subscribe(topic: string, signal = new AbortController().signal): Promise<string> {
-    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
-
-    const id = await SafeRpc.requestOrThrow<string>(this.socket, {
+  async subscribe(topic: string): Promise<string> {
+    return await SafeRpc.requestOrThrow<string>(this.socket, {
       method: "irn_subscribe",
       params: { topic }
-    }, subsignal).then(r => r.getOrThrow())
-
-    return id
+    }, this.closed).then(r => r.getOrThrow())
   }
 
-  async unsubscribe(id: string, topic: string, signal = new AbortController().signal): Promise<void> {
-    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
-
+  async unsubscribe(id: string, topic: string): Promise<void> {
     await SafeRpc.requestOrThrow<true>(this.socket, {
       method: "irn_unsubscribe",
       params: { id, topic }
-    }, subsignal).then(r => r.getOrThrow())
-
-    return
+    }, this.closed).then(r => r.getOrThrow())
   }
 
-  async* fetch(topic: string, signal = new AbortController().signal): AsyncGenerator<IrnMessage> {
-    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
-
+  async* fetch(topic: string): AsyncGenerator<IrnMessage> {
     while (true) {
       const data = await SafeRpc.requestOrThrow<{ messages: IrnMessage[], hasMore: boolean }>(this.socket, {
         method: "irn_fetchMessages",
         params: { topic }
-      }, subsignal).then(r => r.getOrThrow())
+      }, this.closed).then(r => r.getOrThrow())
 
       for (const message of data.messages)
         yield message
@@ -168,19 +150,15 @@ export class IrnClient extends EventTarget {
     }
   }
 
-  async publish(payload: IrnPublishPayload, signal = new AbortController().signal): Promise<void> {
-    const subsignal = AbortSignal.any([signal, this.#aborter.signal])
-
+  async publish(payload: IrnPublishPayload): Promise<void> {
     await SafeRpc.requestOrThrow<true>(this.socket, {
       method: "irn_publish",
       params: payload
-    }, subsignal).then(r => r.getOrThrow())
+    }, this.closed).then(r => r.getOrThrow())
   }
 
   close(reason?: string) {
     this.#aborter.abort()
-
-    this.#closed = { reason }
 
     const event = new CloseEvent("close", { reason })
 

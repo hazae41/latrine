@@ -38,10 +38,10 @@ export class WcResponder extends EventTarget {
   ) {
     super()
 
-    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.#aborter.signal })
-    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.#aborter.signal })
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
+    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.closed })
 
-    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.#aborter.signal })
+    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
   }
 
   addEventListener<K extends keyof WcResponderEventMap>(type: K, listener: (e: WcResponderEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -149,12 +149,12 @@ export class WcResponder extends EventTarget {
     await upgraded.extension
   }
 
-  async subscribe(signal = new AbortController().signal) {
-    await this.channel.subscribe(signal)
+  async subscribe() {
+    await this.channel.subscribe()
   }
 
-  async fetch(signal = new AbortController().signal) {
-    await this.channel.fetch(signal)
+  async fetch() {
+    await this.channel.fetch()
   }
 
 }

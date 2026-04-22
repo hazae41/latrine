@@ -21,8 +21,6 @@ export interface WcProposerParams {
 
 export class WcProposer extends EventTarget {
 
-  readonly #aborter = new AbortController()
-
   constructor(
     readonly channel: CryptoChannel,
     readonly keypair: CryptoKeyPair,
@@ -30,8 +28,8 @@ export class WcProposer extends EventTarget {
   ) {
     super()
 
-    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.#aborter.signal })
-    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.#aborter.signal })
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.channel.closed })
+    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.channel.closed })
   }
 
   addEventListener<K extends keyof WcProposerEventMap>(type: K, listener: (e: WcProposerEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -49,34 +47,33 @@ export class WcProposer extends EventTarget {
   #onChannelClose(event: CloseEvent) {
     const { reason } = event
 
-    this.#aborter.abort()
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
   }
 
   #onChannelError() {
-    this.#aborter.abort()
-
-    const subevent = new Event("error")
-
-    this.dispatchEvent(subevent)
+    this.dispatchEvent(new Event("error"))
   }
 
   get url() {
     return WcPairParams.stringify({ protocol: "wc:", version: "2", relayProtocol: "irn", pairingTopic: this.channel.topic, symKey: this.channel.key })
   }
 
-  async subscribe(signal = new AbortController().signal) {
-    await this.channel.subscribe(signal)
+  async subscribe() {
+    await this.channel.subscribe()
   }
 
-  async fetch(signal = new AbortController().signal) {
-    await this.channel.fetch(signal)
+  async fetch() {
+    await this.channel.fetch()
   }
 
-  async propose(): Promise<WcSession> {
+  async propose(signal = new AbortController().signal): Promise<WcSession> {
+    using stack = new DisposableStack()
+
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
+
     const { self, requiredNamespaces = {}, optionalNamespaces = {} } = this.params
 
     const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
@@ -103,8 +100,7 @@ export class WcProposer extends EventTarget {
 
     const channel = new CryptoChannel(this.channel.client, sessionTpcHex, sessionKeyRaw)
 
-    // TODO reject
-    const { resolve, promise } = Promise.withResolvers<WcSessionSettleParams>()
+    const { resolve, reject, promise } = Promise.withResolvers<WcSessionSettleParams>()
 
     channel.addEventListener("request", event => {
       const request = event.data
@@ -116,7 +112,9 @@ export class WcProposer extends EventTarget {
 
       event.stopImmediatePropagation()
       event.respondWith(true)
-    })
+    }, { signal: cleaner.signal })
+
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     await channel.subscribe()
 
