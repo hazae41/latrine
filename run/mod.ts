@@ -47,9 +47,9 @@ async function propose() {
 
   console.log(pairing.url)
 
-  const upgrade = Promise.withResolvers<WcSession>()
+  const upgraded = Promise.withResolvers<WcSession>()
 
-  pairing.addEventListener("upgraded", event => upgrade.resolve(event.data))
+  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data))
 
   await pairing.subscribe()
 
@@ -57,8 +57,9 @@ async function propose() {
 
   await pairing.propose()
 
-  const session = await upgrade.promise
+  const session = await upgraded.promise
 
+  session.addEventListener("settled", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
   await session.subscribe()
@@ -76,16 +77,17 @@ async function respond(url: string) {
 
   pairing.addEventListener("proposal", (event) => event.respondWith(true))
 
-  const upgrade = Promise.withResolvers<WcSession>()
+  const upgraded = Promise.withResolvers<WcSession>()
 
-  pairing.addEventListener("upgraded", event => upgrade.resolve(event.data))
+  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data))
 
   await pairing.subscribe()
 
   await pairing.fetch()
 
-  const session = await upgrade.promise
+  const session = await upgraded.promise
 
+  session.addEventListener("settled", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
   await session.subscribe()
@@ -105,6 +107,8 @@ async function resume(stale: WcSession) {
   await session.subscribe()
 
   await session.fetch()
+
+  return session
 }
 
 async function onrequest(request: RpcRequestPreinit<unknown>) {
