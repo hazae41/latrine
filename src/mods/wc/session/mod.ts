@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-explicit-any
 import { CryptoChannel } from "@/mods/crypto/mod.ts";
 import { WcMetadata, WcSessionRequestParams, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
@@ -9,7 +8,7 @@ export interface WcSessionEventMap {
 
   close: CloseEvent
 
-  settled: DataEvent<WcSessionSettleParams>
+  settled: DataEvent<WcSessionData>
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 }
@@ -24,7 +23,6 @@ export interface WcSessionData {
   readonly optionalNamespaces: unknown
 
   readonly expiry: number
-  readonly settle: WcSessionSettleParams
 }
 
 export class WcSession extends EventTarget {
@@ -111,13 +109,6 @@ export class WcSession extends EventTarget {
   async fetch() {
     await this.channel.fetch()
   }
-
-  // async settle(signal = new AbortController().signal) {
-  //   await this.channel.request({
-  //     method: "wc_sessionSettle",
-  //     params: this.session.settle
-  //   }, signal).then(r => r.getOrThrow())
-  // }
 
   async delete(): Promise<void> {
     const params = { code: 6000, message: "User disconnected." }

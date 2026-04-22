@@ -1,6 +1,6 @@
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { CryptoChannel } from "@/mods/crypto/mod.ts";
-import { WcMetadata, WcPairParams, WcSessionProposeResult } from "@/mods/wc/mod.ts";
+import { WcMetadata, WcPairParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
 import { DataEvent } from "@hazae41/plume";
 
@@ -68,7 +68,7 @@ export class WcProposer extends EventTarget {
     await this.channel.fetch()
   }
 
-  async propose(signal = new AbortController().signal) {
+  async propose() {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -86,21 +86,45 @@ export class WcProposer extends EventTarget {
     const response = await this.channel.request<WcSessionProposeResult>({
       method: "wc_sessionPropose",
       params: { proposer, relays, requiredNamespaces, optionalNamespaces }
-    }, signal).then(r => r.getOrThrow())
+    }).then(r => r.getOrThrow())
 
-    const peerPubRaw = Uint8Array.fromHex(response.responderPublicKey)
-    const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
+    {
+      const peerPubRaw = Uint8Array.fromHex(response.responderPublicKey)
+      const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
 
-    const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, this.keypair.privateKey, 256))
-    const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
-    const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
+      const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, this.keypair.privateKey, 256))
+      const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
+      const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
-    const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
+      const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+      const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-    const channel = new CryptoChannel(this.channel.client, sessionTpcHex, sessionKeyRaw)
+      const session = new WcSession(new CryptoChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
-    this.dispatchEvent(new DataEvent("upgraded", { data: new WcSession(channel) }))
+      this.dispatchEvent(new DataEvent("upgraded", { data: session }))
+
+      {
+        const { resolve, reject, promise } = Promise.withResolvers<WcSessionSettleParams>()
+
+        session.channel.addEventListener("request", (event) => {
+          const request = event.data
+
+          if (request.method !== "wc_sessionSettle")
+            return
+
+          resolve(request.params as WcSessionSettleParams)
+
+          event.stopImmediatePropagation()
+          event.respondWith(true)
+        }, { signal: cleaner.signal })
+
+        session.channel.closed.addEventListener("abort", reject, { signal: cleaner.signal })
+
+        const { controller, namespaces, requiredNamespaces, optionalNamespaces, expiry } = await promise
+
+        session.dispatchEvent(new DataEvent("settled", { data: { self, peer: controller.metadata, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
+      }
+    }
   }
 
 }
