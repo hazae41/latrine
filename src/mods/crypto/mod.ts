@@ -323,24 +323,6 @@ export class CryptoChannel extends EventTarget {
     return
   }
 
-  async publish(init: RpcRequestPreinit<unknown>) {
-    const request = SafeRpc.prepare(init)
-
-    const { topic } = this
-    const message = this.#encryptOrThrow(request)
-    const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
-
-    const { id } = request
-    const end = Date.now() + (ttl * 1000)
-
-    const receipt = { id, end }
-    const payload = { topic, message, prompt, tag, ttl }
-
-    await this.client.publish(payload)
-
-    return receipt
-  }
-
   async request<T>(init: RpcRequestPreinit<unknown>, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
@@ -361,11 +343,31 @@ export class CryptoChannel extends EventTarget {
     return await promise
   }
 
+  async publish(init: RpcRequestPreinit<unknown>) {
+    const request = SafeRpc.prepare(init)
+
+    const { topic } = this
+    const message = this.#encryptOrThrow(request)
+    const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
+
+    const { id } = request
+    const end = Date.now() + (ttl * 1000)
+
+    const receipt = { id, end }
+    const payload = { topic, message, prompt, tag, ttl }
+
+    await this.client.publish(payload)
+
+    return receipt
+  }
+
   async wait<T>(receipt: RpcReceipt, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
+
+    const timeout = AbortSignal.timeout(receipt.end - Date.now())
 
     const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
 
@@ -377,8 +379,6 @@ export class CryptoChannel extends EventTarget {
 
       resolve(RpcResponse.from<T>(init))
     }, { signal: cleaner.signal })
-
-    const timeout = AbortSignal.timeout(receipt.end - Date.now())
 
     const subsignal = AbortSignal.any([signal, timeout, this.closed])
     subsignal.addEventListener("abort", reject, { signal: cleaner.signal })

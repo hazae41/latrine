@@ -114,7 +114,8 @@ export class WcProposer extends EventTarget {
       event.respondWith(true)
     }, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+    const subsignal = AbortSignal.any([signal, this.closed])
+    subsignal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     await channel.subscribe()
 
