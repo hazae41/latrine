@@ -98,6 +98,9 @@ export class WcProposer extends EventTarget {
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
 
     const cleaner = new AbortController()
+    const { signal } = cleaner
+
+    const subsignal = AbortSignal.any([signal, session.channel.closed])
 
     session.channel.addEventListener("request", (event) => {
       const request = event.data
@@ -113,7 +116,7 @@ export class WcProposer extends EventTarget {
       event.respondWith(true)
 
       cleaner.abort()
-    }, { signal: cleaner.signal })
+    }, { signal: subsignal })
   }
 
 }

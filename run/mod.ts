@@ -42,7 +42,6 @@ const jwk = crypto.getRandomValues(new Uint8Array(32))
 
 async function propose() {
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
-
   const pairing = await WalletConnect.propose(client, { self, optionalNamespaces })
 
   console.log(pairing.url)
