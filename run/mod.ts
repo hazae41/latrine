@@ -58,8 +58,8 @@ async function propose() {
 
   const session = await upgraded.promise
 
-  session.addEventListener("settled", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
+  session.addEventListener("settled", event => console.log(event.data))
 
   await session.subscribe()
 
@@ -86,8 +86,9 @@ async function respond(url: string) {
 
   const session = await upgraded.promise
 
-  session.addEventListener("settled", event => console.log(event.data))
+  session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
+  session.addEventListener("settled", event => console.log(event.data))
 
   await session.subscribe()
 
@@ -101,6 +102,7 @@ async function resume(stale: WcSession) {
 
   const session = new WcSession(new WcChannel(client, stale.channel.topic, stale.channel.key))
 
+  session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
   await session.subscribe()

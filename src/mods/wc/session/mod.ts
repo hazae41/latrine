@@ -3,10 +3,22 @@ import { WcMetadata, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
+export interface WcEvent {
+  readonly name: string
+  readonly data?: unknown
+}
+
+export interface WcEventAndChain {
+  readonly event: WcEvent
+  readonly chainId: number
+}
+
 export interface WcSessionEventMap {
   error: Event
 
   close: CloseEvent
+
+  event: DataEvent<WcEventAndChain>
 
   settled: DataEvent<WcSessionData>
 
@@ -75,6 +87,8 @@ export class WcSession extends EventTarget {
 
     if (request.method === "wc_sessionPing")
       return this.#onSessionPing(event)
+    if (request.method === "wc_sessionEvent")
+      return this.#onSessionEvent(event)
     if (request.method === "wc_sessionRequest")
       return this.#onSessionRequest(event)
 
@@ -82,6 +96,17 @@ export class WcSession extends EventTarget {
   }
 
   #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    event.stopImmediatePropagation()
+    event.respondWith(true)
+  }
+
+  #onSessionEvent(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<WcEventAndChain>
+
+    const subevent = new DataEvent("event", { data: request.params })
+
+    this.dispatchEvent(subevent)
+
     event.stopImmediatePropagation()
     event.respondWith(true)
   }
