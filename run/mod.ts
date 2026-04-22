@@ -42,24 +42,11 @@ const jwk = crypto.getRandomValues(new Uint8Array(32))
 
 async function propose() {
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
-  const pairing = await WalletConnect.propose(client, { self, optionalNamespaces })
+  const session = await WalletConnect.propose(client, console.log, { self, optionalNamespaces })
 
-  console.log(pairing.url)
-
-  const upgraded = Promise.withResolvers<WcSession>()
-
-  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data))
-
-  await pairing.subscribe()
-
-  await pairing.fetch()
-
-  await pairing.propose()
-
-  const session = await upgraded.promise
-
+  session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
-  session.addEventListener("settled", event => console.log(event.data))
+  session.addEventListener("settled", event => console.log("Session settled", event.data))
 
   await session.subscribe()
 
@@ -72,23 +59,11 @@ async function respond(url: string) {
   const peer = WcPairParams.parse(url)
 
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
-  const pairing = await WalletConnect.respond(client, { self, peer, namespaces })
-
-  pairing.addEventListener("proposal", (event) => event.respondWith(true))
-
-  const upgraded = Promise.withResolvers<WcSession>()
-
-  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data))
-
-  await pairing.subscribe()
-
-  await pairing.fetch()
-
-  const session = await upgraded.promise
+  const session = await WalletConnect.respond(client, (proposal) => true, { self, peer, namespaces })
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
-  session.addEventListener("settled", event => console.log(event.data))
+  session.addEventListener("settled", event => console.log("Session settled", event.data))
 
   await session.subscribe()
 
@@ -99,7 +74,6 @@ async function respond(url: string) {
 
 async function resume(stale: WcSession) {
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
-
   const session = new WcSession(new WcChannel(client, stale.channel.topic, stale.channel.key))
 
   session.addEventListener("event", event => console.log(event.data))

@@ -123,14 +123,14 @@ export class IrnClient extends EventTarget {
     return await SafeRpc.requestOrThrow<string>(this.socket, {
       method: "irn_subscribe",
       params: { topic }
-    }, this.closed).then(r => r.getOrThrow())
+    }).then(r => r.getOrThrow())
   }
 
   async unsubscribe(id: string, topic: string): Promise<void> {
     await SafeRpc.requestOrThrow<true>(this.socket, {
       method: "irn_unsubscribe",
       params: { id, topic }
-    }, this.closed).then(r => r.getOrThrow())
+    }).then(r => r.getOrThrow())
   }
 
   async* fetch(topic: string): AsyncGenerator<IrnMessage> {
@@ -138,7 +138,7 @@ export class IrnClient extends EventTarget {
       const data = await SafeRpc.requestOrThrow<{ messages: IrnMessage[], hasMore: boolean }>(this.socket, {
         method: "irn_fetchMessages",
         params: { topic }
-      }, this.closed).then(r => r.getOrThrow())
+      }).then(r => r.getOrThrow())
 
       for (const message of data.messages)
         yield message
@@ -154,7 +154,7 @@ export class IrnClient extends EventTarget {
     await SafeRpc.requestOrThrow<true>(this.socket, {
       method: "irn_publish",
       params: payload
-    }, this.closed).then(r => r.getOrThrow())
+    }).then(r => r.getOrThrow())
   }
 
   close(reason?: string) {

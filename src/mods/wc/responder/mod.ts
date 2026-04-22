@@ -1,5 +1,5 @@
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
-import { WcMetadata, WcPairParams, WcSessionProposeParams } from "@/mod.ts";
+import { IrnClient, WcMetadata, WcPairParams, WcSessionProposeParams } from "@/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
@@ -42,6 +42,15 @@ export class WcResponder extends EventTarget {
     channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.closed })
 
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
+  }
+
+  static async from(client: IrnClient, params: WcResponderParams) {
+    const { pairingTopic, symKey } = params.peer
+
+    const channel = new WcChannel(client, pairingTopic, symKey)
+    const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
+
+    return new WcResponder(channel, keypair, params)
   }
 
   addEventListener<K extends keyof WcResponderEventMap>(type: K, listener: (e: WcResponderEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -140,7 +149,8 @@ export class WcResponder extends EventTarget {
 
     const controller = { publicKey: selfPubHex, metadata: self }
 
-    await session.channel.request({
+    // TODO publish and save receipt?
+    await session.channel.request<true>({
       method: "wc_sessionSettle",
       params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
     }).then(r => r.getOrThrow())
@@ -154,6 +164,10 @@ export class WcResponder extends EventTarget {
 
   async fetch() {
     await this.channel.fetch()
+  }
+
+  async close(reason?: string) {
+    await this.channel.close(reason)
   }
 
 }

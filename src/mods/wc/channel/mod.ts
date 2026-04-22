@@ -376,8 +376,11 @@ export class WcChannel extends EventTarget {
       resolve(RpcResponse.from<T>(init))
     }, { signal: cleaner.signal })
 
-    const subsignal = AbortSignal.any([signal, timeout, this.closed])
-    subsignal.addEventListener("abort", reject, { signal: cleaner.signal })
+    this.addEventListener("close", reject, { signal: cleaner.signal })
+
+    timeout.addEventListener("abort", reject, { signal: cleaner.signal })
+
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     return await promise
   }

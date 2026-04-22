@@ -1,4 +1,5 @@
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
+import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcMetadata, WcPairParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
@@ -30,6 +31,16 @@ export class WcProposer extends EventTarget {
 
     channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.channel.closed })
     channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.channel.closed })
+  }
+
+  static async from(client: IrnClient, params: WcProposerParams) {
+    const topic = crypto.getRandomValues(new Uint8Array(32)).toHex()
+    const symkey = crypto.getRandomValues(new Uint8Array(32)) as Uint8Array<ArrayBuffer, 32>
+
+    const channel = new WcChannel(client, topic, symkey)
+    const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
+
+    return new WcProposer(channel, keypair, params)
   }
 
   addEventListener<K extends keyof WcProposerEventMap>(type: K, listener: (e: WcProposerEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -98,9 +109,6 @@ export class WcProposer extends EventTarget {
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
 
     const cleaner = new AbortController()
-    const { signal } = cleaner
-
-    const subsignal = AbortSignal.any([signal, session.channel.closed])
 
     session.channel.addEventListener("request", (event) => {
       const request = event.data
@@ -116,7 +124,13 @@ export class WcProposer extends EventTarget {
       event.respondWith(true)
 
       cleaner.abort()
-    }, { signal: subsignal })
+    }, { signal: cleaner.signal })
+
+    session.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
+  }
+
+  async close(reason?: string) {
+    return this.channel.close(reason)
   }
 
 }

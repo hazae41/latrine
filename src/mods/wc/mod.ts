@@ -5,10 +5,12 @@ export * from "./session/mod.ts";
 
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
+import { Awaitable } from "@/libs/promises/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcProposer, WcProposerParams } from "@/mods/wc/proposer/mod.ts";
 import { WcResponder, WcResponderParams } from "@/mods/wc/responder/mod.ts";
+import { WcSession } from "@/mods/wc/session/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { Option } from "@hazae41/result-and-option";
 
@@ -131,23 +133,65 @@ export namespace WalletConnect {
     return new IrnClient(socket)
   }
 
-  export async function propose(client: IrnClient, params: WcProposerParams) {
-    const topic = crypto.getRandomValues(new Uint8Array(32)).toHex()
-    const symkey = crypto.getRandomValues(new Uint8Array(32)) as Uint8Array<ArrayBuffer, 32>
+  export async function propose(client: IrnClient, callback: (url: string) => void, params: WcProposerParams, signal = new AbortController().signal): Promise<WcSession> {
+    using stack = new DisposableStack()
 
-    const channel = new WcChannel(client, topic, symkey)
-    const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
 
-    return new WcProposer(channel, keypair, params)
+    const pairing = await WcProposer.from(client, params)
+
+    stack.defer(() => pairing.close())
+
+    callback(pairing.url)
+
+    const upgraded = Promise.withResolvers<WcSession>()
+
+    pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+
+    pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
+
+    signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
+
+    await pairing.subscribe()
+
+    await pairing.fetch()
+
+    await pairing.propose()
+
+    return await upgraded.promise
   }
 
-  export async function respond(client: IrnClient, params: WcResponderParams) {
-    const { pairingTopic, symKey } = params.peer
+  export async function respond(client: IrnClient, callback: (proposal: WcSessionProposeParams) => Awaitable<true>, params: WcResponderParams, signal = new AbortController().signal): Promise<WcSession> {
+    using stack = new DisposableStack()
 
-    const channel = new WcChannel(client, pairingTopic, symKey)
-    const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
+    const cleaner = new AbortController()
 
-    return new WcResponder(channel, keypair, params)
+    stack.defer(() => cleaner.abort())
+
+    const pairing = await WcResponder.from(client, params)
+
+    stack.defer(() => pairing.close())
+
+    const upgraded = Promise.withResolvers<WcSession>()
+
+    pairing.addEventListener("proposal", (event) => event.respondWith(callback(event.data)), { signal: cleaner.signal })
+
+    pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+
+    pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
+
+    signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
+
+    await pairing.subscribe()
+
+    await pairing.fetch()
+
+    return await upgraded.promise
+  }
+
+  export async function resume(client: IrnClient, topic: string, key: Uint8Array<ArrayBuffer, 32>): Promise<WcSession> {
+    return new WcSession(new WcChannel(client, topic, key))
   }
 
 }
