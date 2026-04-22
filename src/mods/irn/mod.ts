@@ -92,10 +92,10 @@ export class IrnClient extends EventTarget {
 
     const message = JSON.parse(event.data) as RpcMessageInit
 
-    if ("method" in message)
-      this.#onRequest(message).catch(console.error)
+    if ("method" in message === false)
+      return
 
-    return
+    this.#onRequest(message).catch(console.error)
   }
 
   async #onRequest(request: RpcRequestInit<unknown>) {

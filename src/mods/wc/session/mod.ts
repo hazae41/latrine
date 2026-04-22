@@ -1,12 +1,15 @@
+// deno-lint-ignore-file no-explicit-any
 import { CryptoChannel } from "@/mods/crypto/mod.ts";
 import { WcMetadata, WcSessionRequestParams, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
-import { DataRespondableEvent } from "@hazae41/plume";
+import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
 export interface WcSessionEventMap {
   error: Event
 
   close: CloseEvent
+
+  settled: DataEvent<WcSessionSettleParams>
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 }
@@ -29,8 +32,7 @@ export class WcSession extends EventTarget {
   readonly #aborter = new AbortController()
 
   constructor(
-    readonly channel: CryptoChannel,
-    readonly session: WcSessionData
+    readonly channel: CryptoChannel
   ) {
     super()
 
@@ -73,10 +75,21 @@ export class WcSession extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
+    if (request.method === "wc_sessionSettle")
+      return this.#onSessionSettle(event)
     if (request.method === "wc_sessionRequest")
       return this.#onSessionRequest(event)
 
     return
+  }
+
+  #onSessionSettle(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const params = event.data.params as WcSessionSettleParams
+
+    this.dispatchEvent(new DataEvent("settled", { data: params }))
+
+    event.stopImmediatePropagation()
+    event.respondWith(true)
   }
 
   #onSessionRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -99,12 +112,12 @@ export class WcSession extends EventTarget {
     await this.channel.fetch()
   }
 
-  async settle() {
-    await this.channel.request({
-      method: "wc_sessionSettle",
-      params: this.session.settle
-    }).then(r => r.getOrThrow())
-  }
+  // async settle(signal = new AbortController().signal) {
+  //   await this.channel.request({
+  //     method: "wc_sessionSettle",
+  //     params: this.session.settle
+  //   }, signal).then(r => r.getOrThrow())
+  // }
 
   async delete(): Promise<void> {
     const params = { code: 6000, message: "User disconnected." }

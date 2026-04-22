@@ -3,7 +3,7 @@ import { WcMetadata, WcPairParams, WcSessionProposeParams } from "@/mod.ts";
 import { CryptoChannel } from "@/mods/crypto/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
-import { DataExtendableEvent, DataRespondableEvent } from "@hazae41/plume";
+import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
 export interface WcResponderEventMap {
   error: Event
@@ -12,7 +12,7 @@ export interface WcResponderEventMap {
 
   proposal: DataRespondableEvent<WcSessionProposeParams, boolean>
 
-  upgraded: DataExtendableEvent<WcSession>
+  upgraded: DataEvent<WcSession>
 }
 
 export interface WcResponderParams {
@@ -77,10 +77,10 @@ export class WcResponder extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
-    if (request.method === "wc_sessionPropose")
-      return this.#onSessionPropose(event).catch(console.error)
+    if (request.method !== "wc_sessionPropose")
+      return
 
-    return
+    this.#onSessionPropose(event).catch(console.error)
   }
 
   async #onSessionPropose(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -125,28 +125,26 @@ export class WcResponder extends EventTarget {
 
     const channel = new CryptoChannel(this.channel.client, sessionTpcHex, sessionKeyRaw)
 
+    this.dispatchEvent(new DataEvent("upgraded", { data: new WcSession(channel) }))
+
     const { self } = this.params
 
     const peer = request.params.proposer.metadata
 
     const { namespaces } = this.params
 
-    const { requiredNamespaces = request.params.requiredNamespaces } = this.params
-    const { optionalNamespaces = request.params.optionalNamespaces } = this.params
+    // const { requiredNamespaces = request.params.requiredNamespaces } = this.params
+    // const { optionalNamespaces = request.params.optionalNamespaces } = this.params
 
-    const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = this.params
+    // const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = this.params
 
-    const controller = { publicKey: selfPubHex, metadata: self }
+    // const controller = { publicKey: selfPubHex, metadata: self }
 
-    const settle = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
+    // const settle = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
 
-    const session = new WcSession(channel, { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry, settle })
+    // const session = new WcSession(channel, { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry, settle })
 
-    const upgraded = new DataExtendableEvent("upgraded", { data: session })
-
-    this.dispatchEvent(upgraded)
-
-    await upgraded.extension
+    // this.dispatchEvent(new DataEvent("upgraded", { data: session }))
   }
 
   async subscribe() {

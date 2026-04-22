@@ -1,15 +1,15 @@
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { CryptoChannel } from "@/mods/crypto/mod.ts";
-import { WcMetadata, WcPairParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
+import { WcMetadata, WcPairParams, WcSessionProposeResult } from "@/mods/wc/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
-import { DataExtendableEvent } from "@hazae41/plume";
+import { DataEvent } from "@hazae41/plume";
 
 export interface WcProposerEventMap {
   error: Event
 
   close: CloseEvent
 
-  upgraded: DataExtendableEvent<WcSession>
+  upgraded: DataEvent<WcSession>
 }
 
 export interface WcProposerParams {
@@ -68,7 +68,7 @@ export class WcProposer extends EventTarget {
     await this.channel.fetch()
   }
 
-  async propose(signal = new AbortController().signal): Promise<WcSession> {
+  async propose(signal = new AbortController().signal) {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -86,7 +86,7 @@ export class WcProposer extends EventTarget {
     const response = await this.channel.request<WcSessionProposeResult>({
       method: "wc_sessionPropose",
       params: { proposer, relays, requiredNamespaces, optionalNamespaces }
-    }).then(r => r.getOrThrow())
+    }, signal).then(r => r.getOrThrow())
 
     const peerPubRaw = Uint8Array.fromHex(response.responderPublicKey)
     const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
@@ -100,36 +100,7 @@ export class WcProposer extends EventTarget {
 
     const channel = new CryptoChannel(this.channel.client, sessionTpcHex, sessionKeyRaw)
 
-    const { resolve, reject, promise } = Promise.withResolvers<WcSessionSettleParams>()
-
-    channel.addEventListener("request", event => {
-      const request = event.data
-
-      if (request.method !== "wc_sessionSettle")
-        return
-
-      resolve(request.params as WcSessionSettleParams)
-
-      event.stopImmediatePropagation()
-      event.respondWith(true)
-    }, { signal: cleaner.signal })
-
-    const subsignal = AbortSignal.any([signal, this.closed])
-    subsignal.addEventListener("abort", reject, { signal: cleaner.signal })
-
-    await channel.subscribe()
-
-    await channel.fetch()
-
-    const settle = await promise
-
-    {
-      const { namespaces, requiredNamespaces = {}, optionalNamespaces = {}, expiry } = settle
-
-      const session = new WcSession(channel, { self, peer: settle.controller.metadata, namespaces, requiredNamespaces, optionalNamespaces, expiry, settle })
-
-      return session
-    }
+    this.dispatchEvent(new DataEvent("upgraded", { data: new WcSession(channel) }))
   }
 
 }

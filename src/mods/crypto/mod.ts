@@ -7,7 +7,7 @@ import { IrnClient } from "@/mods/mod.ts";
 import { Readable, Unknown, Writable } from "@hazae41/binary";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { RpcId, RpcInvalidRequestError, RpcMessageInit, RpcRequestInit, RpcRequestPreinit, RpcResponse, RpcResponseInit } from "@hazae41/jsonrpc";
-import { DataExtendableEvent, DataRespondableEvent } from "@hazae41/plume";
+import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 import { Result } from "@hazae41/result-and-option";
 
 export interface RpcOpts {
@@ -137,7 +137,7 @@ export interface CryptoClientEventMap {
 
   request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
 
-  response: DataExtendableEvent<RpcResponseInit<unknown>>
+  response: DataEvent<RpcResponseInit<unknown>>
 }
 
 export class CryptoChannel extends EventTarget {
@@ -278,11 +278,7 @@ export class CryptoChannel extends EventTarget {
   }
 
   async #onResponse(response: RpcResponseInit<unknown>) {
-    const event = new DataExtendableEvent("response", { data: response })
-
-    this.dispatchEvent(event)
-
-    await event.extension
+    this.dispatchEvent(new DataEvent("response", { data: response }))
   }
 
   #encryptOrThrow(data: unknown): string {
@@ -371,7 +367,7 @@ export class CryptoChannel extends EventTarget {
 
     const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
 
-    this.addEventListener("response", (event: DataExtendableEvent<RpcResponseInit<unknown>>) => {
+    this.addEventListener("response", (event: DataEvent<RpcResponseInit<unknown>>) => {
       const init = event.data as RpcResponseInit<T>
 
       if (init.id !== receipt.id)
