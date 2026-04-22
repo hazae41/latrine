@@ -1,5 +1,5 @@
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
-import { WcMetadata, WcSessionRequestParams, WcSessionSettleParams } from "@/mods/wc/mod.ts";
+import { WcMetadata, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
@@ -73,19 +73,15 @@ export class WcSession extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
-    if (request.method === "wc_sessionSettle")
-      return this.#onSessionSettle(event)
+    if (request.method === "wc_sessionPing")
+      return this.#onSessionPing(event)
     if (request.method === "wc_sessionRequest")
       return this.#onSessionRequest(event)
 
     return
   }
 
-  #onSessionSettle(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
-    const params = event.data.params as WcSessionSettleParams
-
-    this.dispatchEvent(new DataEvent("settled", { data: params }))
-
+  #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     event.stopImmediatePropagation()
     event.respondWith(true)
   }
@@ -108,6 +104,20 @@ export class WcSession extends EventTarget {
 
   async fetch() {
     await this.channel.fetch()
+  }
+
+  async ping(signal = new AbortController().signal) {
+    await this.channel.request<true>({
+      method: "wc_sessionPing",
+      params: {}
+    }, signal).then(r => r.getOrThrow())
+  }
+
+  async event(event: { name: string, data?: unknown }, chainId: number, signal = new AbortController().signal) {
+    await this.channel.request<true>({
+      method: "wc_sessionEvent",
+      params: { event, chainId }
+    }, signal).then(r => r.getOrThrow())
   }
 
   async delete(): Promise<void> {
