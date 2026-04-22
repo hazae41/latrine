@@ -1,6 +1,6 @@
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
-import { CryptoChannel } from "@/mods/crypto/mod.ts";
+import { WcChannel } from "@/mods/crypto/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcProposer, WcProposerParams } from "@/mods/wc/proposer/mod.ts";
 import { WcResponder, WcResponderParams } from "@/mods/wc/responder/mod.ts";
@@ -130,7 +130,7 @@ export namespace WalletConnect {
     const topic = crypto.getRandomValues(new Uint8Array(32)).toHex()
     const symkey = crypto.getRandomValues(new Uint8Array(32)) as Uint8Array<ArrayBuffer, 32>
 
-    const channel = new CryptoChannel(client, topic, symkey)
+    const channel = new WcChannel(client, topic, symkey)
     const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
     return new WcProposer(channel, keypair, params)
@@ -139,7 +139,7 @@ export namespace WalletConnect {
   export async function respond(client: IrnClient, params: WcResponderParams) {
     const { pairingTopic, symKey } = params.peer
 
-    const channel = new CryptoChannel(client, pairingTopic, symKey)
+    const channel = new WcChannel(client, pairingTopic, symKey)
     const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
     return new WcResponder(channel, keypair, params)

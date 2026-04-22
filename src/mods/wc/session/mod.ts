@@ -1,4 +1,4 @@
-import { CryptoChannel } from "@/mods/crypto/mod.ts";
+import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcMetadata, WcSessionRequestParams, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
@@ -30,7 +30,7 @@ export class WcSession extends EventTarget {
   readonly #aborter = new AbortController()
 
   constructor(
-    readonly channel: CryptoChannel
+    readonly channel: WcChannel
   ) {
     super()
 

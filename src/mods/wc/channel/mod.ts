@@ -130,7 +130,7 @@ export interface RpcReceiptAndPromise<T> {
   readonly promise: Promise<RpcResponse<T>>
 }
 
-export interface CryptoClientEventMap {
+export interface WcChannelEventMap {
   error: Event
 
   close: CloseEvent
@@ -140,7 +140,7 @@ export interface CryptoClientEventMap {
   response: DataEvent<RpcResponseInit<unknown>>
 }
 
-export class CryptoChannel extends EventTarget {
+export class WcChannel extends EventTarget {
 
   readonly #aborter = new AbortController()
 
@@ -173,7 +173,7 @@ export class CryptoChannel extends EventTarget {
     this.close()
   }
 
-  addEventListener<K extends keyof CryptoClientEventMap>(type: K, listener: (e: CryptoClientEventMap[K]) => void, options?: AddEventListenerOptions): void
+  addEventListener<K extends keyof WcChannelEventMap>(type: K, listener: (e: WcChannelEventMap[K]) => void, options?: AddEventListenerOptions): void
 
   addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
 

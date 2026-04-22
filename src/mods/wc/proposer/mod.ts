@@ -1,5 +1,5 @@
 import type { Uint8Array } from "@/libs/bytes/mod.ts";
-import { CryptoChannel } from "@/mods/crypto/mod.ts";
+import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcMetadata, WcPairParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
 import { DataEvent } from "@hazae41/plume";
@@ -22,7 +22,7 @@ export interface WcProposerParams {
 export class WcProposer extends EventTarget {
 
   constructor(
-    readonly channel: CryptoChannel,
+    readonly channel: WcChannel,
     readonly keypair: CryptoKeyPair,
     readonly params: WcProposerParams
   ) {
@@ -99,7 +99,7 @@ export class WcProposer extends EventTarget {
       const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
       const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-      const session = new WcSession(new CryptoChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
+      const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
       this.dispatchEvent(new DataEvent("upgraded", { data: session }))
 

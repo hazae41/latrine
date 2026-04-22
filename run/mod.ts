@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-unused-vars no-process-global
 
-import { CryptoChannel } from "@/mods/crypto/mod.ts";
+import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WalletConnect, WcPairParams } from "@/mods/wc/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
@@ -47,11 +47,17 @@ async function propose() {
 
   console.log(pairing.url)
 
+  const upgrade = Promise.withResolvers<WcSession>()
+
+  pairing.addEventListener("upgraded", event => upgrade.resolve(event.data))
+
   await pairing.subscribe()
 
   await pairing.fetch()
 
-  const session = await pairing.propose()
+  await pairing.propose()
+
+  const session = await upgrade.promise
 
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
@@ -84,8 +90,6 @@ async function respond(url: string) {
 
   await session.subscribe()
 
-  await session.settle()
-
   await session.fetch()
 
   return session
@@ -94,9 +98,7 @@ async function respond(url: string) {
 async function resume(stale: WcSession) {
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
 
-  const channel = new CryptoChannel(client, stale.channel.topic, stale.channel.key)
-
-  const session = new WcSession(channel, stale.session)
+  const session = new WcSession(new WcChannel(client, stale.channel.topic, stale.channel.key))
 
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
 
