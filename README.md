@@ -1,6 +1,6 @@
 # Latrine
 
-Secure and private reimplementation of the WalletConnect protocol
+Secure and private WalletConnect client
 
 ```bash
 npm i @hazae41/latrine
