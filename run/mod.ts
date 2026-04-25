@@ -16,9 +16,9 @@ const chains = [1]
 
 const self = {
   name: "Latrine",
-  description: "A secure and private wallet for the web.",
-  url: "https://latrine.hazae41.com",
-  icons: ["https://latrine.hazae41.com/icon.png"],
+  description: "Alternative WalletConnect client",
+  url: "https://github.com/hazae41/latrine",
+  icons: [],
 }
 
 const namespaces = {
@@ -41,18 +41,17 @@ const optionalNamespaces = {
 const jwk = crypto.getRandomValues(new Uint8Array(32))
 
 async function propose() {
-  const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
   const session = await WalletConnect.propose(client, console.log, { self, optionalNamespaces })
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
-  session.addEventListener("settled", event => console.log("Session settled", event.data))
 
   await session.subscribe()
 
   await session.fetch()
 
-  await session.settled
+  console.log(await session.settled)
 
   return session
 }
@@ -60,24 +59,23 @@ async function propose() {
 async function respond(url: string) {
   const peer = WcPairParams.parse(url)
 
-  const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
   const session = await WalletConnect.respond(client, (proposal) => true, { self, peer, namespaces })
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
-  session.addEventListener("settled", event => console.log("Session settled", event.data))
 
   await session.subscribe()
 
   await session.fetch()
 
-  await session.settled
+  console.log(await session.settled)
 
   return session
 }
 
 async function resume(stale: WcSession) {
-  const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
+  const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
   const channel = new WcChannel(client, stale.channel.topic, stale.channel.key)
   const session = new WcSession(channel, await stale.settled)
