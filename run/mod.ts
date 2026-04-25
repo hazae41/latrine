@@ -52,6 +52,8 @@ async function propose() {
 
   await session.fetch()
 
+  await session.settled
+
   return session
 }
 
@@ -69,12 +71,16 @@ async function respond(url: string) {
 
   await session.fetch()
 
+  await session.settled
+
   return session
 }
 
 async function resume(stale: WcSession) {
   const client = await WalletConnect.open(jwk, "b580c84c2c57b6e4f78ab117951de721")
-  const session = new WcSession(new WcChannel(client, stale.channel.topic, stale.channel.key))
+
+  const channel = new WcChannel(client, stale.channel.topic, stale.channel.key)
+  const session = new WcSession(channel, await stale.settled)
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))

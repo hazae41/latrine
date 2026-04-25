@@ -41,17 +41,32 @@ export interface WcSessionData {
 
 export class WcSession extends EventTarget {
 
+  readonly channel: WcChannel
+
   readonly #aborter = new AbortController()
 
-  constructor(
-    readonly channel: WcChannel
-  ) {
+  readonly settled: Promise<WcSessionData>
+
+  constructor(channel: WcChannel, settled?: WcSessionData) {
     super()
+
+    this.channel = channel
 
     channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
     channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.closed })
 
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
+
+    if (settled == null) {
+      const { resolve, reject, promise } = Promise.withResolvers<WcSessionData>()
+
+      this.addEventListener("settled", e => resolve(e.data), { signal: this.closed })
+      this.#aborter.signal.addEventListener("abort", reject, { signal: this.closed })
+
+      this.settled = promise
+    } else {
+      this.settled = Promise.resolve(settled)
+    }
   }
 
   addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
