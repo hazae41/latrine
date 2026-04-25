@@ -149,7 +149,6 @@ export class WcResponder extends EventTarget {
 
     const controller = { publicKey: selfPubHex, metadata: self }
 
-    // TODO publish and save receipt?
     await session.channel.request<true>({
       method: "wc_sessionSettle",
       params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
