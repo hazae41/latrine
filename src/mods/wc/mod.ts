@@ -7,7 +7,6 @@ import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
 import { Awaitable } from "@/libs/promises/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
-import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcProposer, WcProposerParams } from "@/mods/wc/proposer/mod.ts";
 import { WcResponder, WcResponderParams } from "@/mods/wc/responder/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
@@ -188,10 +187,6 @@ export namespace WalletConnect {
     await pairing.fetch()
 
     return await upgraded.promise
-  }
-
-  export async function resume(client: IrnClient, topic: string, key: Uint8Array<ArrayBuffer, 32>): Promise<WcSession> {
-    return new WcSession(new WcChannel(client, topic, key))
   }
 
 }

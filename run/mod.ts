@@ -1,11 +1,11 @@
 // deno-lint-ignore-file no-unused-vars no-process-global
 
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
-import { WalletConnect, WcPairParams } from "@/mods/wc/mod.ts";
-import { WcSession } from "@/mods/wc/session/mod.ts";
+import { WalletConnect, WcPairParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
+import { WcEventAndChain, WcSession } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
-import { RpcMethodNotFoundError, RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { RpcMethodNotFoundError } from "@hazae41/jsonrpc";
 
 await chaCha20Poly1305Wasm.load()
 
@@ -48,7 +48,7 @@ async function propose() {
   }, { self, optionalNamespaces })
 
   session.addEventListener("event", event => console.log(event.data))
-  session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
   await session.subscribe()
 
@@ -69,7 +69,7 @@ async function respond(url: string) {
   }, { self, peer, namespaces })
 
   session.addEventListener("event", event => console.log(event.data))
-  session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
   await session.subscribe()
 
@@ -80,14 +80,28 @@ async function respond(url: string) {
   return session
 }
 
-async function resume(stale: WcSession) {
+async function save(session: WcSession) {
+  const { topic } = session.channel
+
+  const key = session.channel.key.toBase64()
+  const settled = await session.settled
+
+  return JSON.stringify({ topic, key, settled })
+}
+
+async function resume(saved: string) {
+  const parsed = JSON.parse(saved)
+
+  const { topic, settled } = parsed.topic
+  const key = Uint8Array.fromBase64(parsed.key)
+
   const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
-  const channel = new WcChannel(client, stale.channel.topic, stale.channel.key)
-  const session = new WcSession(channel, await stale.settled)
+  const channel = new WcChannel(client, topic, key)
+  const session = new WcSession(channel, settled)
 
   session.addEventListener("event", event => console.log(event.data))
-  session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
   await session.subscribe()
 
@@ -96,15 +110,21 @@ async function resume(stale: WcSession) {
   return session
 }
 
-async function onrequest(request: RpcRequestPreinit<unknown>) {
-  const { method, params } = request
+async function onrequest(data: WcSessionRequestParams<unknown>) {
+  const { request, chainId } = data
 
-  console.log(method, params)
+  console.log(chainId, request)
 
-  if (method === "personal_sign")
+  if (request.method === "personal_sign")
     return "0x4d7920656d61696c206973206a6f686e40646f652e636f6d202d2031373736373030303335353530"
 
   throw new RpcMethodNotFoundError()
+}
+
+async function onevent(data: WcEventAndChain) {
+  const { event, chainId } = data
+
+  console.log(chainId, event)
 }
 
 console.log("Pairing...")
@@ -128,7 +148,7 @@ await new Promise(resolve => setTimeout(resolve, 10000))
 
 console.log("Resuming session...")
 
-const session2 = await resume(session)
+const session2 = await resume(await save(session))
 
 console.log("Session resumed")
 

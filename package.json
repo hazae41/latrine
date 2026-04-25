@@ -52,7 +52,7 @@
     "unit-tested"
   ],
   "peerDependencies": {
-    "@hazae41/chacha20poly1305": "^2.0.1"
+    "@hazae41/chacha20poly1305": "^2.0.2"
   },
   "dependencies": {
     "@hazae41/binary": "^2.0.2",

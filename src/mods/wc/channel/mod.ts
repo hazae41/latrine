@@ -147,7 +147,7 @@ export class WcChannel extends EventTarget {
   constructor(
     readonly client: IrnClient,
     readonly topic: string,
-    readonly key: Uint8Array<ArrayBuffer, 32>,
+    readonly key: Uint8Array<ArrayBuffer>,
   ) {
     super()
 
