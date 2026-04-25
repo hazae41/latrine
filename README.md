@@ -11,14 +11,11 @@ npm i @hazae41/latrine
 ## Features
 
 ### Current features
-- 100% TypeScript and ESM
-- No external dependencies
-- Rust-like patterns
 - Uses web standards
 - Supply-chain hardened
 - No trackable identifiers
 - Auditable cryptography
-- Made for reliability
+- Minimalist and reliable
 - Can work on Deno/Node
 
 ## Usage
