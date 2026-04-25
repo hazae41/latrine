@@ -42,7 +42,10 @@ const jwk = crypto.getRandomValues(new Uint8Array(32))
 
 async function propose() {
   const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
-  const session = await WalletConnect.propose(client, console.log, { self, optionalNamespaces })
+
+  const session = await WalletConnect.propose(client, url => {
+    console.log("Copy this URL to your wallet:", url)
+  }, { self, optionalNamespaces })
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))
@@ -60,7 +63,10 @@ async function respond(url: string) {
   const peer = WcPairParams.parse(url)
 
   const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
-  const session = await WalletConnect.respond(client, (proposal) => true, { self, peer, namespaces })
+
+  const session = await WalletConnect.respond(client, (proposal) => {
+    return confirm(`Do you want to connect to ${proposal.proposer.metadata.name}?`)
+  }, { self, peer, namespaces })
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data.request)))

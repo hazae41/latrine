@@ -162,7 +162,7 @@ export namespace WalletConnect {
     return await upgraded.promise
   }
 
-  export async function respond(client: IrnClient, callback: (proposal: WcSessionProposeParams) => Awaitable<true>, params: WcResponderParams, signal = new AbortController().signal): Promise<WcSession> {
+  export async function respond(client: IrnClient, callback: (proposal: WcSessionProposeParams) => Awaitable<boolean>, params: WcResponderParams, signal = new AbortController().signal): Promise<WcSession> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
