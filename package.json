@@ -23,9 +23,9 @@
     "@hazae41/chacha20poly1305-wasm": "^2.0.0",
     "@hazae41/phobos": "^2.0.16",
     "@hazae41/tscousin": "^1.0.28",
-    "@types/node": "^25.0.3",
-    "deno": "^2.6.3",
-    "typescript": "^5.9.3"
+    "@types/node": "^25.6.0",
+    "deno": "^2.7.13",
+    "typescript": "^6.0.3"
   },
   "keywords": [
     "walletconnect",
@@ -60,6 +60,6 @@
     "@hazae41/jsonrpc": "^1.1.11",
     "@hazae41/plume": "^4.0.0",
     "@hazae41/result-and-option": "^2.0.10",
-    "@scure/base": "^2.0.0"
+    "@scure/base": "^2.2.0"
   }
 }
