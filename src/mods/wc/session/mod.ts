@@ -139,8 +139,12 @@ export class WcSession extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    event.stopImmediatePropagation()
     event.waitUntil(subevent.extension)
+
+    if (subevent.response == null)
+      return
+
+    event.stopImmediatePropagation()
     event.respondWith(subevent.response)
   }
 
