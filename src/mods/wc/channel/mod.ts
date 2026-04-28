@@ -16,6 +16,42 @@ export interface RpcOpts {
 }
 
 export const ENGINE_RPC_OPTS: Record<string, { req: RpcOpts, res: RpcOpts }> = {
+  wc_pairingDelete: {
+    req: {
+      ttl: 24 * 60 * 60,
+      prompt: false,
+      tag: 1000,
+    },
+    res: {
+      ttl: 24 * 60 * 60,
+      prompt: false,
+      tag: 1001,
+    },
+  },
+  wc_pairingPing: {
+    req: {
+      ttl: 30,
+      prompt: false,
+      tag: 1002,
+    },
+    res: {
+      ttl: 30,
+      prompt: false,
+      tag: 1003,
+    },
+  },
+  wc_pairingExtend: {
+    req: {
+      ttl: 24 * 60 * 60,
+      prompt: false,
+      tag: 1004,
+    },
+    res: {
+      ttl: 24 * 60 * 60,
+      prompt: false,
+      tag: 1005,
+    },
+  },
   wc_sessionPropose: {
     req: {
       ttl: 5 * 60,

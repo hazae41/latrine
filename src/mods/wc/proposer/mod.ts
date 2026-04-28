@@ -1,7 +1,9 @@
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
+import { WcUserDisconnectedError } from "@/mods/wc/errors/mod.ts";
 import { WcMetadata, WcPairParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
+import { RpcError } from "@hazae41/jsonrpc";
 import { DataEvent } from "@hazae41/plume";
 
 export interface WcProposerEventMap {
@@ -129,7 +131,11 @@ export class WcProposer extends EventTarget {
   }
 
   async close(reason?: string) {
-    return this.channel.close(reason)
+    return await this.channel.close(reason)
+  }
+
+  async delete(params: RpcError = new WcUserDisconnectedError()) {
+    await this.channel.publish({ method: "wc_pairingDelete", params })
   }
 
 }

@@ -97,17 +97,16 @@ export namespace WalletConnect {
     return new IrnClient(socket)
   }
 
-  export async function propose(client: IrnClient, callback: (url: string) => void, params: WcProposerParams, signal = new AbortController().signal): Promise<WcSession> {
-    using stack = new DisposableStack()
+  export async function propose(client: IrnClient, callback: (url: string) => Awaitable<void>, params: WcProposerParams, signal = new AbortController().signal): Promise<WcSession> {
+    await using stack = new AsyncDisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
     const pairing = await WcProposer.from(client, params)
+    stack.defer(async () => pairing.delete())
 
-    stack.defer(() => pairing.close())
-
-    callback(pairing.url)
+    await callback(pairing.url)
 
     const upgraded = Promise.withResolvers<WcSession>()
 
@@ -127,15 +126,13 @@ export namespace WalletConnect {
   }
 
   export async function respond(client: IrnClient, callback: (proposal: WcSessionProposeParams) => Awaitable<boolean>, params: WcResponderParams, signal = new AbortController().signal): Promise<WcSession> {
-    using stack = new DisposableStack()
+    await using stack = new AsyncDisposableStack()
 
     const cleaner = new AbortController()
-
     stack.defer(() => cleaner.abort())
 
     const pairing = await WcResponder.from(client, params)
-
-    stack.defer(() => pairing.close())
+    stack.defer(async () => pairing.close())
 
     const upgraded = Promise.withResolvers<WcSession>()
 

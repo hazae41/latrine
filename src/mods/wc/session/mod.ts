@@ -1,6 +1,7 @@
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
+import { WcUserDisconnectedError } from "@/mods/wc/errors/mod.ts";
 import { WcIdentity, WcMetadata, WcRelay } from "@/mods/wc/mod.ts";
-import { RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { RpcError, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
 export interface WcEvent {
@@ -44,6 +45,11 @@ export interface WcSessionSettleParams {
 export interface WcSessionRequestParams<T = unknown> {
   readonly chainId: `${string}:${string}`
   readonly request: RpcRequestPreinit<T>
+}
+
+export interface WcSessionDeleteParams {
+  readonly code: number
+  readonly message: string
 }
 
 export interface WcSessionEventMap {
@@ -207,12 +213,12 @@ export class WcSession extends EventTarget {
     }, signal).then(r => r.getOrThrow())
   }
 
-  async delete(): Promise<void> {
-    const params = { code: 6000, message: "User disconnected." }
-
+  async delete(params: RpcError = new WcUserDisconnectedError()): Promise<void> {
     await this.channel.publish({ method: "wc_sessionDelete", params })
+  }
 
-    await this.channel.close()
+  async close(reason?: string) {
+    return await this.channel.close(reason)
   }
 
 }
