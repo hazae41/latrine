@@ -1,4 +1,3 @@
-import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { IrnClient, WcMetadata, WcPairParams, WcSessionProposeParams } from "@/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
@@ -129,7 +128,7 @@ export class WcResponder extends EventTarget {
     const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
     const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32))
     const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
     const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))

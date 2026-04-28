@@ -1,4 +1,3 @@
-import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcMetadata, WcPairParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
@@ -35,7 +34,7 @@ export class WcProposer extends EventTarget {
 
   static async from(client: IrnClient, params: WcProposerParams) {
     const topic = crypto.getRandomValues(new Uint8Array(32)).toHex()
-    const symkey = crypto.getRandomValues(new Uint8Array(32)) as Uint8Array<ArrayBuffer, 32>
+    const symkey = crypto.getRandomValues(new Uint8Array(32))
 
     const channel = new WcChannel(client, topic, symkey)
     const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
@@ -101,7 +100,7 @@ export class WcProposer extends EventTarget {
     const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
     const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
 
-    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32)) as Uint8Array<ArrayBuffer, 32>
+    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32))
     const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
     const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))

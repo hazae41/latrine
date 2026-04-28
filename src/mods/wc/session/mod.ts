@@ -1,5 +1,5 @@
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
-import { WcMetadata, WcSessionRequestParams } from "@/mods/wc/mod.ts";
+import { WcIdentity, WcMetadata, WcRelay } from "@/mods/wc/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
@@ -11,6 +11,39 @@ export interface WcEvent {
 export interface WcEventAndChain {
   readonly event: WcEvent
   readonly chainId: number
+}
+
+export interface WcSessionProposeParams {
+  readonly relays: WcRelay[]
+
+  readonly proposer: WcIdentity
+
+  readonly requiredNamespaces: unknown
+  readonly optionalNamespaces: unknown
+}
+
+export interface WcSessionProposeResult {
+  readonly relay: WcRelay
+  readonly responderPublicKey: string
+}
+
+export interface WcSessionSettleParams {
+  readonly relay: WcRelay
+
+  readonly controller: WcIdentity
+
+  readonly namespaces: unknown
+
+  readonly requiredNamespaces: unknown
+  readonly optionalNamespaces: unknown
+
+  readonly pairingTopic: string
+  readonly expiry: number
+}
+
+export interface WcSessionRequestParams<T = unknown> {
+  readonly chainId: `${string}:${string}`
+  readonly request: RpcRequestPreinit<T>
 }
 
 export interface WcSessionEventMap {
@@ -25,6 +58,8 @@ export interface WcSessionEventMap {
   settled: DataEvent<WcSessionData>
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
+
+  deleted: DataEvent<{ code: number, message: string }>
 }
 
 export interface WcSessionData {
@@ -108,6 +143,8 @@ export class WcSession extends EventTarget {
       return this.#onSessionEvent(event)
     if (request.method === "wc_sessionRequest")
       return this.#onSessionRequest(event)
+    if (request.method === "wc_sessionDelete")
+      return
 
     return
   }

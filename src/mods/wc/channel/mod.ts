@@ -1,4 +1,3 @@
-import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "@/libs/crypto/mod.ts";
 import { SafeJson } from "@/libs/json/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";

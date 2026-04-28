@@ -3,14 +3,12 @@ export * from "./proposer/mod.ts";
 export * from "./responder/mod.ts";
 export * from "./session/mod.ts";
 
-import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
 import { Awaitable } from "@/libs/promises/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcProposer, WcProposerParams } from "@/mods/wc/proposer/mod.ts";
 import { WcResponder, WcResponderParams } from "@/mods/wc/responder/mod.ts";
-import { WcSession } from "@/mods/wc/session/mod.ts";
-import { RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
 import { Option } from "@hazae41/result-and-option";
 
 export interface WcRelay {
@@ -29,45 +27,12 @@ export interface WcIdentity {
   readonly metadata: WcMetadata
 }
 
-export interface WcSessionProposeParams {
-  readonly relays: WcRelay[]
-
-  readonly proposer: WcIdentity
-
-  readonly requiredNamespaces: unknown
-  readonly optionalNamespaces: unknown
-}
-
-export interface WcSessionProposeResult {
-  readonly relay: WcRelay
-  readonly responderPublicKey: string
-}
-
-export interface WcSessionSettleParams {
-  readonly relay: WcRelay
-
-  readonly controller: WcIdentity
-
-  readonly namespaces: unknown
-
-  readonly requiredNamespaces: unknown
-  readonly optionalNamespaces: unknown
-
-  readonly pairingTopic: string
-  readonly expiry: number
-}
-
-export interface WcSessionRequestParams<T = unknown> {
-  readonly chainId: `${string}:${string}`
-  readonly request: RpcRequestPreinit<T>
-}
-
 export interface WcPairParams {
   readonly protocol: "wc:"
   readonly version: "2"
   readonly pairingTopic: string
   readonly relayProtocol: "irn"
-  readonly symKey: Uint8Array<ArrayBuffer, 32>
+  readonly symKey: Uint8Array<ArrayBuffer>
 }
 
 export namespace WcPairParams {
@@ -100,7 +65,7 @@ export namespace WcPairParams {
       throw new Error(`Unknown relay protocol`)
 
     const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
-    const symKeyRaw = Uint8Array.fromHex(symKeyHex) as Uint8Array<ArrayBuffer, 32>
+    const symKeyRaw = Uint8Array.fromHex(symKeyHex)
 
     return { protocol, pairingTopic, version, relayProtocol, symKey: symKeyRaw }
   }
@@ -111,7 +76,7 @@ export namespace WalletConnect {
 
   export const RELAY = "wss://relay.walletconnect.org"
 
-  export async function open(jwk: Uint8Array<ArrayBuffer, 32>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
+  export async function open(jwk: Uint8Array<ArrayBuffer>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()

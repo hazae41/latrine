@@ -1,4 +1,3 @@
-import type { Uint8Array } from "@/libs/bytes/mod.ts";
 import { Unknown, Writable } from "@hazae41/binary";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { Cursor } from "@hazae41/cursor";
@@ -9,7 +8,7 @@ export class Plaintext<T extends Writable> {
     readonly fragment: T
   ) { }
 
-  encryptOrThrow(key: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher, iv: Uint8Array<ArrayBuffer, 12>): Ciphertext {
+  encryptOrThrow(key: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher, iv: Uint8Array<ArrayBuffer>): Ciphertext {
     const { Memory } = chaCha20Poly1305.get().getOrThrow()
 
     using plain = Memory.fromOrThrow(Writable.writeToBytesOrThrow(this.fragment))
@@ -26,7 +25,7 @@ export class Plaintext<T extends Writable> {
 export class Ciphertext {
 
   constructor(
-    readonly iv: Uint8Array<ArrayBuffer, 12>,
+    readonly iv: Uint8Array<ArrayBuffer>,
     readonly inner: Uint8Array<ArrayBuffer>,
   ) { }
 
@@ -132,7 +131,7 @@ export class EnvelopeTypeOne<T extends Writable> {
   readonly type = this.#class.type
 
   constructor(
-    readonly sender: Uint8Array<ArrayBuffer, 32>,
+    readonly sender: Uint8Array<ArrayBuffer>,
     readonly fragment: T
   ) { }
 
