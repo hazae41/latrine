@@ -111,7 +111,7 @@ async function onrequest(data: WcSessionRequestParams<unknown>) {
   if (request.method === "personal_sign")
     return "0x4d7920656d61696c206973206a6f686e40646f652e636f6d202d2031373736373030303335353530"
 
-  throw new Error("Not found")
+  throw new WcInvalidMethodError()
 }
 
 const session = await respond(process.argv[2])

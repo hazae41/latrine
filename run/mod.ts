@@ -1,11 +1,11 @@
 // deno-lint-ignore-file no-unused-vars no-process-global
 
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
+import { WcInvalidMethodError } from "@/mods/wc/errors/mod.ts";
 import { WalletConnect, WcPairParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { WcEventAndChain, WcSession } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
-import { RpcMethodNotFoundError } from "@hazae41/jsonrpc";
 
 await chaCha20Poly1305Wasm.load()
 
@@ -118,7 +118,7 @@ async function onrequest(data: WcSessionRequestParams<unknown>) {
   if (request.method === "personal_sign")
     return "0x4d7920656d61696c206973206a6f686e40646f652e636f6d202d2031373736373030303335353530"
 
-  throw new RpcMethodNotFoundError()
+  throw new WcInvalidMethodError()
 }
 
 async function onevent(data: WcEventAndChain) {

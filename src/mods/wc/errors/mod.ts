@@ -1,5 +1,105 @@
 import { RpcError } from "@hazae41/jsonrpc";
 
+export class WcInvalidMethodError extends RpcError {
+  readonly #class = WcInvalidMethodError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(1001, "Invalid method")
+  }
+
+}
+
+export class WcInvalidEventError extends RpcError {
+  readonly #class = WcInvalidEventError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(1002, "Invalid event")
+  }
+
+}
+
+export class WcInvalidUpdateRequestError extends RpcError {
+  readonly #class = WcInvalidUpdateRequestError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(1003, "Invalid update request")
+  }
+
+}
+
+export class WcInvalidExtendRequestError extends RpcError {
+  readonly #class = WcInvalidExtendRequestError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(1004, "Invalid extend request")
+  }
+
+}
+
+export class WcInvalidSessionSettleRequestError extends RpcError {
+  readonly #class = WcInvalidSessionSettleRequestError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(1005, "Invalid session settle request")
+  }
+
+}
+
+export class WcUnauthorizedMethodError extends RpcError {
+  readonly #class = WcUnauthorizedMethodError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(3001, "Unauthorized method")
+  }
+
+}
+
+export class WcUnauthorizedEventError extends RpcError {
+  readonly #class = WcUnauthorizedEventError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(3002, "Unauthorized event")
+  }
+
+}
+
+export class WcUnauthorizedUpdateRequestError extends RpcError {
+  readonly #class = WcUnauthorizedUpdateRequestError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(3003, "Unauthorized update request")
+  }
+
+}
+
+export class WcUnauthorizedExtendRequestError extends RpcError {
+  readonly #class = WcUnauthorizedExtendRequestError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(3004, "Unauthorized extend request")
+  }
+
+}
+
+export class WcUnauthorizedChainError extends RpcError {
+  readonly #class = WcUnauthorizedChainError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(3005, "Unauthorized chain")
+  }
+
+}
+
 export class WcUserRejectedRequestError extends RpcError {
   readonly #class = WcUserRejectedRequestError
   readonly name = this.#class.name
@@ -106,6 +206,36 @@ export class WcUserDisconnectedError extends RpcError {
 
   constructor() {
     super(6000, "User disconnected")
+  }
+
+}
+
+export class WcSessionSettlementFailedError extends RpcError {
+  readonly #class = WcSessionSettlementFailedError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(7000, "Session settlement failed")
+  }
+
+}
+
+export class WcNoSessionForTopicError extends RpcError {
+  readonly #class = WcNoSessionForTopicError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(7001, "No session for topic")
+  }
+
+}
+
+export class WcSessionRequestExpiredError extends RpcError {
+  readonly #class = WcSessionRequestExpiredError
+  readonly name = this.#class.name
+
+  constructor() {
+    super(8000, "Session request expired")
   }
 
 }
