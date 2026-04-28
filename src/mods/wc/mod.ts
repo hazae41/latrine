@@ -1,15 +1,14 @@
 export * from "./channel/mod.ts";
-export * from "./proposer/mod.ts";
+export * from "./errors/mod.ts";
+export * from "./pairing/mod.ts";
 export * from "./responder/mod.ts";
 export * from "./session/mod.ts";
 
 import { Jwt } from "@/libs/jwt/mod.ts";
 import { Awaitable } from "@/libs/promises/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
-import { WcProposer, WcProposerParams } from "@/mods/wc/proposer/mod.ts";
-import { WcResponder, WcResponderParams } from "@/mods/wc/responder/mod.ts";
+import { WcPairing, WcProposeParams, WcRespondParams } from "@/mods/wc/pairing/mod.ts";
 import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
-import { Option } from "@hazae41/result-and-option";
 
 export interface WcRelay {
   readonly protocol: string
@@ -26,51 +25,6 @@ export interface WcMetadata {
 export interface WcIdentity {
   readonly publicKey: string
   readonly metadata: WcMetadata
-}
-
-export interface WcPairParams {
-  readonly protocol: "wc:"
-  readonly version: "2"
-  readonly pairingTopic: string
-  readonly relayProtocol: "irn"
-  readonly symKey: Uint8Array<ArrayBuffer>
-}
-
-export namespace WcPairParams {
-
-  export function stringify(params: WcPairParams): string {
-    const { protocol, version, pairingTopic, relayProtocol, symKey } = params
-
-    const url = new URL(`${protocol}${pairingTopic}@${version}`)
-
-    url.searchParams.set("relay-protocol", relayProtocol)
-    url.searchParams.set("symKey", symKey.toHex())
-
-    return url.toString()
-  }
-
-  export function parse(rawUrl: string | URL): WcPairParams {
-    const { protocol, pathname, searchParams } = new URL(rawUrl)
-
-    if (protocol !== "wc:")
-      throw new Error(`Unknown protocol`)
-
-    const [pairingTopic, version] = pathname.split("@")
-
-    if (version !== "2")
-      throw new Error(`Unknown version`)
-
-    const relayProtocol = Option.wrap(searchParams.get("relay-protocol")).getOrThrow()
-
-    if (relayProtocol !== "irn")
-      throw new Error(`Unknown relay protocol`)
-
-    const symKeyHex = Option.wrap(searchParams.get("symKey")).getOrThrow()
-    const symKeyRaw = Uint8Array.fromHex(symKeyHex)
-
-    return { protocol, pairingTopic, version, relayProtocol, symKey: symKeyRaw }
-  }
-
 }
 
 export namespace WalletConnect {
@@ -98,14 +52,11 @@ export namespace WalletConnect {
     return new IrnClient(socket)
   }
 
-  export async function propose(client: IrnClient, callback: (url: string) => Awaitable<void>, params: WcProposerParams, signal = new AbortController().signal): Promise<WcSession> {
+  export async function propose(pairing: WcPairing, callback: (url: string) => Awaitable<void>, params: WcProposeParams, signal = new AbortController().signal): Promise<WcSession> {
     await using stack = new AsyncDisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
-
-    const pairing = await WcProposer.from(client, params)
-    stack.defer(async () => pairing.delete())
 
     await callback(pairing.url)
 
@@ -121,19 +72,16 @@ export namespace WalletConnect {
 
     await pairing.fetch()
 
-    await pairing.propose()
+    await pairing.propose(params)
 
     return await upgraded.promise
   }
 
-  export async function respond(client: IrnClient, callback: (proposal: WcSessionProposeParams) => Awaitable<boolean>, params: WcResponderParams, signal = new AbortController().signal): Promise<WcSession> {
+  export async function respond(pairing: WcPairing, callback: (proposal: WcSessionProposeParams) => Awaitable<boolean>, params: WcRespondParams, signal = new AbortController().signal): Promise<WcSession> {
     await using stack = new AsyncDisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
-
-    const pairing = await WcResponder.from(client, params)
-    stack.defer(async () => pairing.close())
 
     const upgraded = Promise.withResolvers<WcSession>()
 
@@ -148,6 +96,8 @@ export namespace WalletConnect {
     await pairing.subscribe()
 
     await pairing.fetch()
+
+    pairing.respond(params)
 
     return await upgraded.promise
   }

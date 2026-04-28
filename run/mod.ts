@@ -2,7 +2,7 @@
 
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcInvalidMethodError } from "@/mods/wc/errors/mod.ts";
-import { WalletConnect, WcPairParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
+import { WalletConnect, WcPairingParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { WcEventAndChain, WcSession } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
@@ -60,7 +60,7 @@ async function propose() {
 }
 
 async function respond(url: string) {
-  const peer = WcPairParams.parse(url)
+  const peer = WcPairingParams.parse(url)
 
   const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 

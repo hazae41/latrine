@@ -1,4 +1,4 @@
-import { IrnClient, WcMetadata, WcPairParams, WcSessionProposeParams } from "@/mod.ts";
+import { IrnClient, WcMetadata, WcPairingParams, WcSessionProposeParams } from "@/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
@@ -18,7 +18,7 @@ export interface WcResponderEventMap {
 
 export interface WcResponderParams {
   readonly self: WcMetadata
-  readonly peer: WcPairParams
+  readonly peer: WcPairingParams
 
   readonly namespaces: unknown
 
