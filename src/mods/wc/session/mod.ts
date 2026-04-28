@@ -44,7 +44,13 @@ export interface WcSessionSettleParams {
 
 export interface WcSessionRequestParams<T = unknown> {
   readonly chainId: `${string}:${string}`
-  readonly request: RpcRequestPreinit<T>
+  readonly request: WcRequest<T>
+}
+
+export interface WcRequest<T = unknown> {
+  readonly method: string
+  readonly params: T
+  readonly expiry?: number
 }
 
 export interface WcSessionDeleteParams {
