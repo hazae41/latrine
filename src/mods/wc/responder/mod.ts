@@ -1,8 +1,10 @@
 import { IrnClient, WcMetadata, WcPairParams, WcSessionProposeParams } from "@/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
+import { WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WcSession } from "@/mods/wc/session/mod.ts";
 import { RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
+import { Result } from "@hazae41/result-and-option";
 
 export interface WcResponderEventMap {
   error: Event
@@ -109,10 +111,12 @@ export class WcResponder extends EventTarget {
 
     await proposal.extension
 
-    const response = await proposal.response
+    const response = await Result.runAndWrap(() => proposal.response)
 
-    if (response !== true)
-      return
+    if (response.isErr())
+      return reject(response.getErr())
+    if (response.get() !== true)
+      return reject(new WcUserRejectedError())
 
     const { relay } = this.channel.client
 
