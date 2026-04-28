@@ -135,7 +135,7 @@ export class WcProposer extends EventTarget {
   }
 
   async extend(expiry: number) {
-    await this.channel.publish({ method: "wc_pairingExtend", params: { expiry } })
+    await this.channel.request<true>({ method: "wc_pairingExtend", params: { expiry } }).then(r => r.getOrThrow())
   }
 
   async delete(params: RpcError = new WcUserDisconnectedError()) {

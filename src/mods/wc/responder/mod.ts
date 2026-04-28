@@ -88,9 +88,9 @@ export class WcResponder extends EventTarget {
     const request = event.data
 
     if (request.method !== "wc_sessionPropose")
-      return
+      return this.#onSessionPropose(event).catch(console.error)
 
-    this.#onSessionPropose(event).catch(console.error)
+    return
   }
 
   async #onSessionPropose(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
