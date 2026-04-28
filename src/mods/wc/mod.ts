@@ -1,7 +1,6 @@
 export * from "./channel/mod.ts";
 export * from "./errors/mod.ts";
 export * from "./pairing/mod.ts";
-export * from "./responder/mod.ts";
 export * from "./session/mod.ts";
 
 import { Jwt } from "@/libs/jwt/mod.ts";
