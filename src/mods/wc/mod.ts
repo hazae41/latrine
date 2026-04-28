@@ -13,6 +13,7 @@ import { Option } from "@hazae41/result-and-option";
 
 export interface WcRelay {
   readonly protocol: string
+  readonly data?: string
 }
 
 export interface WcMetadata {
