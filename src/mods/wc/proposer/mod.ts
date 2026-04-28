@@ -80,6 +80,10 @@ export class WcProposer extends EventTarget {
     await this.channel.fetch()
   }
 
+  async close(reason?: string) {
+    await this.channel.close(reason)
+  }
+
   async propose() {
     const { self, requiredNamespaces = {}, optionalNamespaces = {} } = this.params
 
@@ -130,8 +134,8 @@ export class WcProposer extends EventTarget {
     session.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
   }
 
-  async close(reason?: string) {
-    return await this.channel.close(reason)
+  async extend(expiry: number) {
+    await this.channel.publish({ method: "wc_pairingExtend", params: { expiry } })
   }
 
   async delete(params: RpcError = new WcUserDisconnectedError()) {

@@ -205,6 +205,10 @@ export class WcSession extends EventTarget {
     await this.channel.fetch()
   }
 
+  async close(reason?: string) {
+    return await this.channel.close(reason)
+  }
+
   async ping(signal = new AbortController().signal) {
     await this.channel.request<true>({
       method: "wc_sessionPing",
@@ -221,10 +225,6 @@ export class WcSession extends EventTarget {
 
   async delete(params: RpcError = new WcUserDisconnectedError()): Promise<void> {
     await this.channel.publish({ method: "wc_sessionDelete", params })
-  }
-
-  async close(reason?: string) {
-    return await this.channel.close(reason)
   }
 
 }
