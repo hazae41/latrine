@@ -1,7 +1,7 @@
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserDisconnectedError } from "@/mods/wc/errors/mod.ts";
 import { WcIdentity, WcMetadata, WcRelay } from "@/mods/wc/mod.ts";
-import { RpcError, RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { RpcError, RpcErrorInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
 export interface WcEvent {
@@ -71,7 +71,7 @@ export interface WcSessionEventMap {
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 
-  deleted: DataEvent<{ code: number, message: string }>
+  deleted: DataEvent<RpcErrorInit>
 }
 
 export interface WcSessionData {
@@ -206,21 +206,15 @@ export class WcSession extends EventTarget {
   }
 
   async ping(signal = new AbortController().signal) {
-    await this.channel.request<true>({
-      method: "wc_sessionPing",
-      params: {}
-    }, signal).then(r => r.getOrThrow())
+    await this.channel.request<true>({ method: "wc_sessionPing", params: {} }, signal).then(r => r.getOrThrow())
   }
 
   async event(event: { name: string, data?: unknown }, chainId: number, signal = new AbortController().signal) {
-    await this.channel.request<true>({
-      method: "wc_sessionEvent",
-      params: { event, chainId }
-    }, signal).then(r => r.getOrThrow())
+    await this.channel.request<true>({ method: "wc_sessionEvent", params: { event, chainId } }, signal).then(r => r.getOrThrow())
   }
 
-  async extend(expiry: number) {
-    await this.channel.request<true>({ method: "wc_sessionExtend", params: { expiry } }).then(r => r.getOrThrow())
+  async extend(expiry: number, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_sessionExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
   }
 
   async delete(params: RpcError = new WcUserDisconnectedError()): Promise<void> {

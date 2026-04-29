@@ -3,7 +3,7 @@ import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserDisconnectedError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WcMetadata, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
 import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
-import { RpcError, RpcRequestPreinit } from "@hazae41/jsonrpc";
+import { RpcError, RpcErrorInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 import { Option, Result } from "@hazae41/result-and-option";
 
@@ -68,6 +68,8 @@ export namespace WcPairingParams {
 }
 
 export interface WcPairingEventMap {
+  ping: Event
+
   error: Event
 
   close: CloseEvent
@@ -75,6 +77,8 @@ export interface WcPairingEventMap {
   proposal: DataRespondableEvent<WcSessionProposeParams, boolean>
 
   upgraded: DataEvent<WcSession>
+
+  deleted: DataEvent<RpcErrorInit>
 }
 
 export class WcPairing extends EventTarget {
@@ -273,8 +277,12 @@ export class WcPairing extends EventTarget {
     this.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
   }
 
-  async extend(expiry: number) {
-    await this.channel.request<true>({ method: "wc_pairingExtend", params: { expiry } }).then(r => r.getOrThrow())
+  async ping(signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_pairingPing", params: {} }, signal).then(r => r.getOrThrow())
+  }
+
+  async extend(expiry: number, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_pairingExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
   }
 
   async delete(params: RpcError = new WcUserDisconnectedError()) {
