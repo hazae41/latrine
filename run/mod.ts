@@ -63,6 +63,9 @@ async function propose(signal = new AbortController().signal): Promise<WcSession
 
   await pairing.open()
 
+  stack.defer(async () => await pairing.close())
+  stack.defer(async () => await pairing.delete())
+
   await pairing.propose({ self, optionalNamespaces })
 
   const session = await upgraded.promise
@@ -99,6 +102,9 @@ async function respond(url: string, signal = new AbortController().signal): Prom
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
   await pairing.open()
+
+  stack.defer(async () => await pairing.close())
+  stack.defer(async () => await pairing.delete())
 
   await pairing.respond({ self, namespaces })
 
