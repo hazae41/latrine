@@ -197,12 +197,8 @@ export class WcSession extends EventTarget {
     event.respondWith(subevent.response)
   }
 
-  async subscribe() {
-    await this.channel.subscribe()
-  }
-
-  async fetch() {
-    await this.channel.fetch()
+  async open() {
+    await this.channel.open()
   }
 
   async close(reason?: string) {

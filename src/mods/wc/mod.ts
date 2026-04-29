@@ -4,10 +4,7 @@ export * from "./pairing/mod.ts";
 export * from "./session/mod.ts";
 
 import { Jwt } from "@/libs/jwt/mod.ts";
-import { Awaitable } from "@/libs/promises/mod.ts";
 import { IrnClient } from "@/mods/irn/mod.ts";
-import { WcPairing, WcProposeParams, WcRespondParams } from "@/mods/wc/pairing/mod.ts";
-import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
 
 export interface WcRelay {
   readonly protocol: string
@@ -30,15 +27,15 @@ export namespace WalletConnect {
 
   export const RELAY = "wss://relay.walletconnect.org"
 
-  export async function open(jwk: Uint8Array<ArrayBuffer>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
+  export async function open(relay: string, jwk: Uint8Array<ArrayBuffer>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const jwt = await Jwt.signOrThrow(jwk, RELAY)
+    const jwt = await Jwt.signOrThrow(jwk, relay)
 
-    const socket = new WebSocket(`${RELAY}/?auth=${jwt}&projectId=${projectId}`)
+    const socket = new WebSocket(`${relay}/?auth=${jwt}&projectId=${projectId}`)
 
     const { resolve, reject, promise } = Promise.withResolvers()
 
@@ -51,54 +48,54 @@ export namespace WalletConnect {
     return new IrnClient(socket)
   }
 
-  export async function propose(pairing: WcPairing, callback: (url: string) => Awaitable<void>, params: WcProposeParams, signal = new AbortController().signal): Promise<WcSession> {
-    await using stack = new AsyncDisposableStack()
+  // export async function propose(pairing: WcPairing, callback: (url: string) => Awaitable<void>, params: WcProposeParams, signal = new AbortController().signal): Promise<WcSession> {
+  //   await using stack = new AsyncDisposableStack()
 
-    const cleaner = new AbortController()
-    stack.defer(() => cleaner.abort())
+  //   const cleaner = new AbortController()
+  //   stack.defer(() => cleaner.abort())
 
-    await callback(pairing.url)
+  //   await callback(pairing.url)
 
-    const upgraded = Promise.withResolvers<WcSession>()
+  //   const upgraded = Promise.withResolvers<WcSession>()
 
-    pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+  //   pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
 
-    pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
+  //   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
+  //   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
-    await pairing.subscribe()
+  //   await pairing.subscribe()
 
-    await pairing.fetch()
+  //   await pairing.fetch()
 
-    await pairing.propose(params)
+  //   await pairing.propose(params)
 
-    return await upgraded.promise
-  }
+  //   return await upgraded.promise
+  // }
 
-  export async function respond(pairing: WcPairing, callback: (proposal: WcSessionProposeParams) => Awaitable<boolean>, params: WcRespondParams, signal = new AbortController().signal): Promise<WcSession> {
-    await using stack = new AsyncDisposableStack()
+  // export async function respond(pairing: WcPairing, callback: (proposal: WcSessionProposeParams) => Awaitable<boolean>, params: WcRespondParams, signal = new AbortController().signal): Promise<WcSession> {
+  //   await using stack = new AsyncDisposableStack()
 
-    const cleaner = new AbortController()
-    stack.defer(() => cleaner.abort())
+  //   const cleaner = new AbortController()
+  //   stack.defer(() => cleaner.abort())
 
-    const upgraded = Promise.withResolvers<WcSession>()
+  //   const upgraded = Promise.withResolvers<WcSession>()
 
-    pairing.addEventListener("proposal", (event) => event.respondWith(callback(event.data)), { signal: cleaner.signal })
+  //   pairing.addEventListener("proposal", (event) => event.respondWith(callback(event.data)), { signal: cleaner.signal })
 
-    pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+  //   pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
 
-    pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
+  //   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
 
-    signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
+  //   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
-    await pairing.subscribe()
+  //   await pairing.subscribe()
 
-    await pairing.fetch()
+  //   await pairing.fetch()
 
-    pairing.respond(params)
+  //   pairing.respond(params)
 
-    return await upgraded.promise
-  }
+  //   return await upgraded.promise
+  // }
 
 }

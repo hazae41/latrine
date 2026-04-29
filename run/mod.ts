@@ -1,9 +1,10 @@
 // deno-lint-ignore-file no-unused-vars no-process-global
 
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
-import { WcInvalidMethodError } from "@/mods/wc/errors/mod.ts";
+import { WcInvalidMethodError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WalletConnect, WcPairingParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
-import { WcEventAndChain, WcSession } from "@/mods/wc/session/mod.ts";
+import { WcPairing } from "@/mods/wc/pairing/mod.ts";
+import { WcEventAndChain, WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
 
@@ -40,40 +41,73 @@ const optionalNamespaces = {
 
 const jwk = crypto.getRandomValues(new Uint8Array(32))
 
-async function propose() {
-  const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+async function propose(signal = new AbortController().signal): Promise<WcSession> {
+  await using stack = new AsyncDisposableStack()
 
-  const session = await WalletConnect.propose(client, url => {
-    console.log("Copy this URL to your wallet:", url)
-  }, { self, optionalNamespaces })
+  const cleaner = new AbortController()
+  stack.defer(() => cleaner.abort())
+
+  const client = await WalletConnect.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+
+  const pairing = await WcPairing.generate(client)
+
+  console.log("Copy this URL to your wallet:", pairing.url)
+
+  const upgraded = Promise.withResolvers<WcSession>()
+
+  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+
+  pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
+
+  signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
+
+  await pairing.open()
+
+  await pairing.propose({ self, optionalNamespaces })
+
+  const session = await upgraded.promise
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
-  await session.subscribe()
-
-  await session.fetch()
+  await session.open()
 
   console.log(await session.settled)
 
   return session
 }
 
-async function respond(url: string) {
-  const peer = WcPairingParams.parse(url)
+async function respond(url: string, signal = new AbortController().signal): Promise<WcSession> {
+  await using stack = new AsyncDisposableStack()
 
-  const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+  const cleaner = new AbortController()
+  stack.defer(() => cleaner.abort())
 
-  const session = await WalletConnect.respond(client, (proposal) => {
-    return confirm(`Do you want to connect to ${proposal.proposer.metadata.name}?`)
-  }, { self, peer, namespaces })
+  const client = await WalletConnect.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+
+  const pairing = await WcPairing.from(client, WcPairingParams.parse(url))
+
+  const upgraded = Promise.withResolvers<WcSession>()
+  stack.defer(() => upgraded.reject())
+
+  pairing.addEventListener("proposal", event => event.respondWith(onpropose(event.data)), { signal: cleaner.signal })
+
+  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+
+  pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
+
+  signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
+
+  await pairing.open()
+
+  await pairing.respond({ self, namespaces })
+
+  const session = await upgraded.promise
 
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
-  await session.subscribe()
-
-  await session.fetch()
+  await session.open()
 
   console.log(await session.settled)
 
@@ -95,7 +129,7 @@ async function resume(saved: string) {
   const { topic, settled } = parsed.topic
   const key = Uint8Array.fromBase64(parsed.key)
 
-  const client = await WalletConnect.open(jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+  const client = await WalletConnect.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
   const channel = new WcChannel(client, topic, key)
   const session = new WcSession(channel, settled)
@@ -103,11 +137,18 @@ async function resume(saved: string) {
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
-  await session.subscribe()
-
-  await session.fetch()
+  await session.open()
 
   return session
+}
+
+async function onpropose(proposed: WcSessionProposeParams) {
+  const peer = proposed.proposer.metadata
+
+  if (!confirm(`Do you want to connect to ${peer.name}?`))
+    throw new WcUserRejectedError()
+
+  return true
 }
 
 async function onrequest(data: WcSessionRequestParams<unknown>) {

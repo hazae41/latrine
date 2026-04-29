@@ -137,12 +137,8 @@ export class WcPairing extends EventTarget {
     return WcPairingParams.stringify(this.params)
   }
 
-  async subscribe() {
-    await this.channel.subscribe()
-  }
-
-  async fetch() {
-    await this.channel.fetch()
+  async open() {
+    await this.channel.open()
   }
 
   async close(reason?: string) {
@@ -186,26 +182,35 @@ export class WcPairing extends EventTarget {
       if (request.method !== "wc_sessionSettle")
         return
 
+      cleaner.abort()
+
       const { controller, namespaces, requiredNamespaces, optionalNamespaces, expiry } = request.params as WcSessionSettleParams
 
       session.dispatchEvent(new DataEvent("settled", { data: { self, peer: controller.metadata, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
 
       event.stopImmediatePropagation()
       event.respondWith(true)
-
-      cleaner.abort()
     }, { signal: cleaner.signal })
 
     session.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
   }
 
-  respond(params: WcRespondParams) {
+  async respond(params: WcRespondParams) {
+    const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
+    const selfPubHex = selfPubRaw.toHex()
+
+    const { relay } = this.channel.client
+
+    const cleaner = new AbortController()
+
     // TODO fix catching and signaling
     this.channel.addEventListener("request", async (event) => {
       const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
 
       if (request.method !== "wc_sessionPropose")
         return
+
+      cleaner.abort()
 
       using stack = new DisposableStack()
 
@@ -228,11 +233,6 @@ export class WcPairing extends EventTarget {
         return reject(response.getErr())
       if (response.get() !== true)
         return reject(new WcUserRejectedError())
-
-      const { relay } = this.channel.client
-
-      const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
-      const selfPubHex = selfPubRaw.toHex()
 
       resolve({ relay, responderPublicKey: selfPubHex })
 
@@ -268,7 +268,9 @@ export class WcPairing extends EventTarget {
       }).then(r => r.getOrThrow())
 
       session.dispatchEvent(new DataEvent("settled", { data: { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
-    }, { signal: this.closed })
+    }, { signal: cleaner.signal })
+
+    this.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
   }
 
   async extend(expiry: number) {

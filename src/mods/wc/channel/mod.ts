@@ -342,12 +342,6 @@ export class WcChannel extends EventTarget {
     await this.client.unsubscribe(this.#id, this.topic)
   }
 
-  async fetch() {
-    for await (const data of this.client.fetch(this.topic))
-      await this.#onIrnMessage(data.message)
-    return
-  }
-
   async request<T>(init: RpcRequestPreinit<unknown>, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
@@ -408,9 +402,19 @@ export class WcChannel extends EventTarget {
     return await promise
   }
 
+  async open() {
+    await this.subscribe()
+
+    for await (const data of this.client.fetch(this.topic))
+      await this.#onIrnMessage(data.message)
+
+    return
+  }
+
   async close(reason?: string) {
     if (this.closed.aborted)
       return
+
     await this.unsubscribe()
 
     this.#aborter.abort()
