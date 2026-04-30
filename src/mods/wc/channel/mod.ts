@@ -342,6 +342,18 @@ export class WcChannel extends EventTarget {
     await this.client.unsubscribe(this.#id, this.topic)
   }
 
+  async publish(init: RpcRequestPreinit<unknown>) {
+    const request = SafeRpc.prepare(init)
+
+    const { topic } = this
+    const message = this.#encryptOrThrow(request)
+    const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
+
+    const payload = { topic, message, prompt, tag, ttl }
+
+    await this.client.publish(payload)
+  }
+
   async request<T>(init: RpcRequestPreinit<unknown>, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
@@ -354,31 +366,14 @@ export class WcChannel extends EventTarget {
     const receipt = { id }
     const payload = { topic, message, prompt, tag, ttl }
 
-    const promise = this.wait<T>(receipt, signal)
+    const promise = this.#wait<T>(receipt, signal)
 
     await this.client.publish(payload)
 
     return await promise
   }
 
-  async publish(init: RpcRequestPreinit<unknown>) {
-    const request = SafeRpc.prepare(init)
-
-    const { topic } = this
-    const message = this.#encryptOrThrow(request)
-    const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
-
-    const { id } = request
-
-    const receipt = { id }
-    const payload = { topic, message, prompt, tag, ttl }
-
-    await this.client.publish(payload)
-
-    return receipt
-  }
-
-  async wait<T>(receipt: RpcReceipt, signal = new AbortController().signal): Promise<RpcResponse<T>> {
+  async #wait<T>(receipt: RpcReceipt, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
