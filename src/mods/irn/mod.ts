@@ -1,4 +1,5 @@
 import { SafeJson } from "@/libs/json/mod.ts";
+import { Jwt } from "@/libs/jwt/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
 import { RpcInvalidRequestError, RpcMessageInit, RpcRequestInit, RpcRequestPreinit, RpcResponse } from "@hazae41/jsonrpc";
 import { DataRespondableEvent } from "@hazae41/plume";
@@ -46,6 +47,28 @@ export class IrnClient extends EventTarget {
     socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal })
     socket.addEventListener("close", this.#onSocketClose.bind(this), { signal })
     socket.addEventListener("error", this.#onSocketError.bind(this), { signal })
+  }
+
+  static async open(relay: string, jwk: Uint8Array<ArrayBuffer>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
+    using stack = new DisposableStack()
+
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
+
+    const jwt = await Jwt.signOrThrow(jwk, relay)
+
+    const socket = new WebSocket(`${relay}/?auth=${jwt}&projectId=${projectId}`)
+
+    const { resolve, reject, promise } = Promise.withResolvers()
+    stack.defer(() => reject())
+
+    socket.addEventListener("open", resolve, { signal: cleaner.signal })
+    socket.addEventListener("error", reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+
+    await promise
+
+    return new IrnClient(socket)
   }
 
   [Symbol.dispose]() {

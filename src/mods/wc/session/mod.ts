@@ -188,6 +188,10 @@ export class WcSession extends EventTarget {
     return await this.channel.close(reason)
   }
 
+  async settle(params: WcSessionSettleParams, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_sessionSettle", params }, signal).then(r => r.getOrThrow())
+  }
+
   async ping(signal = new AbortController().signal) {
     await this.channel.request<true>({ method: "wc_sessionPing", params: {} }, signal).then(r => r.getOrThrow())
   }

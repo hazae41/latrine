@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-unused-vars no-process-global
 
+import { IrnClient } from "@/mods/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcInvalidMethodError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WalletConnect, WcPairingParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
@@ -47,7 +48,7 @@ async function propose(signal = new AbortController().signal) {
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
 
-  const client = await WalletConnect.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+  const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
   const pairing = await WcPairing.generate(client)
 
@@ -99,7 +100,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
 
-  const client = await WalletConnect.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+  const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
   const pairing = await WcPairing.from(client, WcPairingParams.parse(url))
 
@@ -107,11 +108,8 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(() => upgraded.reject())
 
   pairing.addEventListener("proposal", event => event.respondWith(onpropose(event.data)), { signal: cleaner.signal })
-
   pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
-
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
-
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
   await pairing.open()
@@ -119,7 +117,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
 
-  await pairing.respond({ self, namespaces })
+  const settled = await pairing.respond({ self, namespaces })
 
   const session = await upgraded.promise
 
@@ -128,7 +126,14 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   await session.open()
 
-  console.log(session)
+  let success = false
+
+  stack.defer(async () => success ? undefined : await session.close())
+  stack.defer(async () => success ? undefined : await session.delete())
+
+  await session.settle(settled)
+
+  success = true
 
   return { session }
 }
@@ -149,7 +154,7 @@ async function save(session: WcSession) {
 async function resume(saved: WcSave) {
   const key = Uint8Array.fromBase64(saved.channel.key)
 
-  const client = await WalletConnect.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+  const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
   const channel = new WcChannel(client, saved.channel.topic, key)
   const session = new WcSession(channel)

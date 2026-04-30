@@ -2,10 +2,10 @@ import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserDisconnectedError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WcMetadata, WcSessionProposeResult } from "@/mods/wc/mod.ts";
-import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
+import { WcSession, WcSessionProposeParams, WcSessionSettleParams } from "@/mods/wc/session/mod.ts";
 import { RpcError, RpcErrorInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
-import { Option, Result } from "@hazae41/result-and-option";
+import { Option } from "@hazae41/result-and-option";
 
 export interface WcProposeParams {
   readonly self: WcMetadata
@@ -198,81 +198,78 @@ export class WcPairing extends EventTarget {
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
   }
 
-  async respond(params: WcRespondParams) {
+  async respond(params: WcRespondParams, signal = new AbortController().signal): Promise<WcSessionSettleParams> {
+    using stack = new DisposableStack()
+
+    const cleaner = new AbortController()
+    stack.defer(() => cleaner.abort())
+
     const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
     const selfPubHex = selfPubRaw.toHex()
 
     const { relay } = this.channel.client
 
-    const cleaner = new AbortController()
+    const proposed = Promise.withResolvers<WcSessionProposeParams>()
+    stack.defer(() => proposed.reject())
 
-    // TODO fix catching and signaling
-    this.channel.addEventListener("request", async (event) => {
+    const responded = Promise.withResolvers<unknown>()
+    stack.defer(() => responded.reject(new WcUserRejectedError()))
+
+    this.channel.addEventListener("request", (event) => {
       const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
 
       if (request.method !== "wc_sessionPropose")
         return
 
-      cleaner.abort()
-
-      using stack = new DisposableStack()
-
-      const response = Promise.withResolvers<unknown>()
-      stack.defer(() => response.reject())
+      proposed.resolve(request.params)
 
       event.stopImmediatePropagation()
-      event.respondWith(response.promise)
-
-      const proposal = new DataRespondableEvent("proposal", { data: request.params })
-
-      this.dispatchEvent(proposal)
-
-      await proposal.extension
-
-      const result = await Result.runAndWrap(() => proposal.response)
-
-      if (result.isErr())
-        return response.reject(result.getErr())
-      if (result.get() !== true)
-        return response.reject(new WcUserRejectedError())
-
-      response.resolve({ relay, responderPublicKey: selfPubHex })
-
-      const peerPubRaw = Uint8Array.fromHex(request.params.proposer.publicKey)
-      const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
-
-      const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, this.keypair.privateKey, 256))
-      const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
-      const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
-
-      const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32))
-      const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
-
-      const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
-
-      this.dispatchEvent(new DataEvent("upgraded", { data: session }))
-
-      const peer = request.params.proposer.metadata
-
-      const { self } = params
-
-      const { namespaces } = params
-
-      const { requiredNamespaces, optionalNamespaces } = request.params
-
-      const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = params
-
-      const controller = { publicKey: selfPubHex, metadata: self }
-
-      await session.channel.request<true>({
-        method: "wc_sessionSettle",
-        params: { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
-      }).then(r => r.getOrThrow())
-
-      session.dispatchEvent(new DataEvent("settled", { data: { self, peer, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
+      event.respondWith(responded.promise)
     }, { signal: cleaner.signal })
 
-    this.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
+    this.channel.addEventListener("close", proposed.reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", proposed.reject, { signal: cleaner.signal })
+
+    const proposal = await proposed.promise
+
+    const subevent = new DataRespondableEvent("proposal", { data: proposal })
+
+    this.dispatchEvent(subevent)
+
+    await subevent.extension
+
+    const response = await subevent.response
+
+    if (response !== true)
+      throw new WcUserRejectedError()
+
+    responded.resolve({ relay, responderPublicKey: selfPubHex })
+
+    const peerPubRaw = Uint8Array.fromHex(proposal.proposer.publicKey)
+    const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
+
+    const hkdfRaw = new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peerPubKey }, this.keypair.privateKey, 256))
+    const hkdfKey = await crypto.subtle.importKey("raw", hkdfRaw, "HKDF", false, ["deriveBits"])
+    const hkdfAlg = { name: "HKDF", hash: "SHA-256", info: new Uint8Array(), salt: new Uint8Array() }
+
+    const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32))
+    const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
+
+    const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
+
+    this.dispatchEvent(new DataEvent("upgraded", { data: session }))
+
+    const { self } = params
+
+    const { namespaces } = params
+
+    const { requiredNamespaces, optionalNamespaces } = proposal
+
+    const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = params
+
+    const controller = { publicKey: selfPubHex, metadata: self }
+
+    return { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
   }
 
   async ping(signal = new AbortController().signal) {
