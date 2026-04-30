@@ -150,15 +150,6 @@ export const ENGINE_RPC_OPTS: Record<string, { req: RpcOpts, res: RpcOpts }> = {
   },
 } as const
 
-export interface RpcReceipt {
-  readonly id: RpcId
-}
-
-export interface RpcReceiptAndPromise<T> {
-  readonly receipt: RpcReceipt
-  readonly promise: Promise<RpcResponse<T>>
-}
-
 export interface WcChannelEventMap {
   error: Event
 
@@ -365,17 +356,16 @@ export class WcChannel extends EventTarget {
 
     const { id } = request
 
-    const receipt = { id }
     const payload = { topic, message, prompt, tag, ttl }
 
-    const promise = this.#wait<T>(receipt, signal)
+    const promise = this.#wait<T>(id, signal)
 
     await this.client.publish(payload)
 
     return await promise
   }
 
-  async #wait<T>(receipt: RpcReceipt, signal = new AbortController().signal): Promise<RpcResponse<T>> {
+  async #wait<T>(id: RpcId, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -387,7 +377,7 @@ export class WcChannel extends EventTarget {
     this.addEventListener("response", (event: DataEvent<RpcResponseInit<unknown>>) => {
       const init = event.data as RpcResponseInit<T>
 
-      if (init.id !== receipt.id)
+      if (init.id !== id)
         return
 
       resolve(RpcResponse.from<T>(init))
