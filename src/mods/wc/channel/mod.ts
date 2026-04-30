@@ -294,20 +294,22 @@ export class WcChannel extends EventTarget {
   }
 
   async #respond(request: RpcRequestInit<unknown>) {
-    const event = new DataRespondableEvent("request", { data: request })
+    const subevent = new DataRespondableEvent("request", { data: request })
 
-    this.dispatchEvent(event)
+    this.dispatchEvent(subevent)
 
-    await event.extension
+    await subevent.extension
 
-    if (event.response != null)
-      return await event.response
+    if (subevent.response != null)
+      return await subevent.response
 
     throw new RpcInvalidRequestError()
   }
 
   async #onResponse(response: RpcResponseInit<unknown>) {
-    this.dispatchEvent(new DataEvent("response", { data: response }))
+    const subevent = new DataEvent("response", { data: response })
+
+    this.dispatchEvent(subevent)
   }
 
   #encryptOrThrow(data: unknown): string {
@@ -380,6 +382,7 @@ export class WcChannel extends EventTarget {
     stack.defer(() => cleaner.abort())
 
     const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
+    stack.defer(() => reject())
 
     this.addEventListener("response", (event: DataEvent<RpcResponseInit<unknown>>) => {
       const init = event.data as RpcResponseInit<T>
@@ -391,7 +394,6 @@ export class WcChannel extends EventTarget {
     }, { signal: cleaner.signal })
 
     this.addEventListener("close", reject, { signal: cleaner.signal })
-
     signal.addEventListener("abort", reject, { signal: cleaner.signal })
 
     return await promise

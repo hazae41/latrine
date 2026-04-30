@@ -1,6 +1,6 @@
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserDisconnectedError } from "@/mods/wc/errors/mod.ts";
-import { WcIdentity, WcMetadata, WcRelay } from "@/mods/wc/mod.ts";
+import { WcIdentity, WcRelay } from "@/mods/wc/mod.ts";
 import { RpcError, RpcErrorInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 
@@ -67,53 +67,26 @@ export interface WcSessionEventMap {
 
   event: DataEvent<WcEventAndChain>
 
-  settled: DataEvent<WcSessionData>
+  settled: DataEvent<WcSessionSettleParams>
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 
   deleted: DataEvent<RpcErrorInit>
 }
 
-export interface WcSessionData {
-  readonly self: WcMetadata
-  readonly peer: WcMetadata
-
-  readonly namespaces: unknown
-
-  readonly requiredNamespaces: unknown
-  readonly optionalNamespaces: unknown
-
-  readonly expiry: number
-}
-
 export class WcSession extends EventTarget {
-
-  readonly channel: WcChannel
 
   readonly #aborter = new AbortController()
 
-  readonly settled: Promise<WcSessionData>
-
-  constructor(channel: WcChannel, settled?: WcSessionData) {
+  constructor(
+    readonly channel: WcChannel
+  ) {
     super()
-
-    this.channel = channel
 
     channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
     channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.closed })
 
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
-
-    if (settled == null) {
-      const { resolve, reject, promise } = Promise.withResolvers<WcSessionData>()
-
-      this.addEventListener("settled", e => resolve(e.data), { signal: this.closed })
-      this.#aborter.signal.addEventListener("abort", reject, { signal: this.closed })
-
-      this.settled = promise
-    } else {
-      this.settled = Promise.resolve(settled)
-    }
   }
 
   addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -149,6 +122,8 @@ export class WcSession extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
+    if (request.method === "wc_sessionSettle")
+      return this.#onSessionSettle(event)
     if (request.method === "wc_sessionPing")
       return this.#onSessionPing(event)
     if (request.method === "wc_sessionEvent")
@@ -159,6 +134,14 @@ export class WcSession extends EventTarget {
       return
 
     return
+  }
+
+  #onSessionSettle(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<WcSessionSettleParams>
+
+    const subevent = new DataEvent("settled", { data: request.params })
+
+    this.dispatchEvent(subevent)
   }
 
   #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {

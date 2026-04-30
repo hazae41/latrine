@@ -1,7 +1,7 @@
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserDisconnectedError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
-import { WcMetadata, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/mod.ts";
+import { WcMetadata, WcSessionProposeResult } from "@/mods/wc/mod.ts";
 import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
 import { RpcError, RpcErrorInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
@@ -92,6 +92,8 @@ export class WcPairing extends EventTarget {
 
     channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.channel.closed })
     channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.channel.closed })
+
+    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
   }
 
   static async generate(client: IrnClient) {
@@ -134,7 +136,24 @@ export class WcPairing extends EventTarget {
   }
 
   #onChannelError() {
-    this.dispatchEvent(new Event("error"))
+    const subevent = new Event("error")
+
+    this.dispatchEvent(subevent)
+  }
+
+  #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data
+
+    if (request.method === "wc_sessionPropose")
+      return this.#onSessionPropose(event)
+
+    return
+  }
+
+  #onSessionPropose(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
+
+
   }
 
   get url() {
@@ -177,26 +196,6 @@ export class WcPairing extends EventTarget {
     const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
-
-    const cleaner = new AbortController()
-
-    session.channel.addEventListener("request", (event) => {
-      const request = event.data
-
-      if (request.method !== "wc_sessionSettle")
-        return
-
-      cleaner.abort()
-
-      const { controller, namespaces, requiredNamespaces, optionalNamespaces, expiry } = request.params as WcSessionSettleParams
-
-      session.dispatchEvent(new DataEvent("settled", { data: { self, peer: controller.metadata, namespaces, requiredNamespaces, optionalNamespaces, expiry } }))
-
-      event.stopImmediatePropagation()
-      event.respondWith(true)
-    }, { signal: cleaner.signal })
-
-    session.channel.addEventListener("close", () => cleaner.abort(), { signal: cleaner.signal })
   }
 
   async respond(params: WcRespondParams) {
@@ -218,12 +217,11 @@ export class WcPairing extends EventTarget {
 
       using stack = new DisposableStack()
 
-      const { resolve, reject, promise } = Promise.withResolvers<unknown>()
-
-      stack.defer(() => reject())
+      const response = Promise.withResolvers<unknown>()
+      stack.defer(() => response.reject())
 
       event.stopImmediatePropagation()
-      event.respondWith(promise)
+      event.respondWith(response.promise)
 
       const proposal = new DataRespondableEvent("proposal", { data: request.params })
 
@@ -231,14 +229,14 @@ export class WcPairing extends EventTarget {
 
       await proposal.extension
 
-      const response = await Result.runAndWrap(() => proposal.response)
+      const result = await Result.runAndWrap(() => proposal.response)
 
-      if (response.isErr())
-        return reject(response.getErr())
-      if (response.get() !== true)
-        return reject(new WcUserRejectedError())
+      if (result.isErr())
+        return response.reject(result.getErr())
+      if (result.get() !== true)
+        return response.reject(new WcUserRejectedError())
 
-      resolve({ relay, responderPublicKey: selfPubHex })
+      response.resolve({ relay, responderPublicKey: selfPubHex })
 
       const peerPubRaw = Uint8Array.fromHex(request.params.proposer.publicKey)
       const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])

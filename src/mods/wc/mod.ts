@@ -38,6 +38,7 @@ export namespace WalletConnect {
     const socket = new WebSocket(`${relay}/?auth=${jwt}&projectId=${projectId}`)
 
     const { resolve, reject, promise } = Promise.withResolvers()
+    stack.defer(() => reject())
 
     socket.addEventListener("open", resolve, { signal: cleaner.signal })
     socket.addEventListener("error", reject, { signal: cleaner.signal })

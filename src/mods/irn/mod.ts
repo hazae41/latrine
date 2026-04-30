@@ -107,14 +107,14 @@ export class IrnClient extends EventTarget {
   }
 
   async #respond(request: RpcRequestInit<unknown>) {
-    const event = new DataRespondableEvent("request", { data: request })
+    const subevent = new DataRespondableEvent("request", { data: request })
 
-    this.dispatchEvent(event)
+    this.dispatchEvent(subevent)
 
-    await event.extension
+    await subevent.extension
 
-    if (event.response != null)
-      return await event.response
+    if (subevent.response != null)
+      return await subevent.response
 
     throw new RpcInvalidRequestError()
   }
@@ -160,9 +160,9 @@ export class IrnClient extends EventTarget {
   close(reason?: string) {
     this.#aborter.abort()
 
-    const event = new CloseEvent("close", { reason })
+    const subevent = new CloseEvent("close", { reason })
 
-    this.dispatchEvent(event)
+    this.dispatchEvent(subevent)
 
     this.socket.close()
   }

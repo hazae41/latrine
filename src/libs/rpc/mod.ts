@@ -18,6 +18,7 @@ export namespace SafeRpc {
     stack.defer(() => cleaner.abort())
 
     const { reject, resolve, promise } = Promise.withResolvers<RpcResponse<T>>()
+    stack.defer(() => reject())
 
     const request = SafeRpc.prepare(init)
 
