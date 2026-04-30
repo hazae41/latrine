@@ -204,9 +204,6 @@ export class WcPairing extends EventTarget {
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
-    const selfPubHex = selfPubRaw.toHex()
-
     const { relay } = this.channel.client
 
     const proposed = Promise.withResolvers<WcSessionProposeParams>()
@@ -242,6 +239,9 @@ export class WcPairing extends EventTarget {
 
     if (response !== true)
       throw new WcUserRejectedError()
+
+    const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
+    const selfPubHex = selfPubRaw.toHex()
 
     responded.resolve({ relay, responderPublicKey: selfPubHex })
 
