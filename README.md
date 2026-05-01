@@ -1,3 +1,5 @@
+<img src="https://github.com/user-attachments/assets/5e3c314c-1f39-4635-89f0-7f259a56048b" />
+
 # Latrine
 
 Secure and private WalletConnect client
