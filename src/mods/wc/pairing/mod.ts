@@ -208,11 +208,6 @@ export class WcPairing extends EventTarget {
   }
 
   async respond(proposal: WcSessionProposeParams): Promise<WcSessionProposeResult> {
-    using stack = new DisposableStack()
-
-    const cleaner = new AbortController()
-    stack.defer(() => cleaner.abort())
-
     const { relay } = this.channel.client
 
     const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
