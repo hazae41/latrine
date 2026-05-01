@@ -146,6 +146,10 @@ export class WcPairing extends EventTarget {
 
     if (request.method === "wc_sessionPropose")
       return this.#onSessionPropose(event)
+    if (request.method === "wc_pairingPing")
+      return this.#onPairingPing(event)
+    if (request.method === "wc_pairingDelete")
+      return this.#onPairingDelete(event)
 
     return
   }
@@ -163,6 +167,24 @@ export class WcPairing extends EventTarget {
       return
 
     event.respondWith(subevent.response)
+  }
+
+  #onPairingPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const subevent = new Event("ping")
+
+    this.dispatchEvent(subevent)
+
+    event.respondWith(true)
+  }
+
+  #onPairingDelete(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<RpcErrorInit>
+
+    const subevent = new DataEvent("deleted", { data: request.params })
+
+    this.dispatchEvent(subevent)
+
+    event.respondWith(true)
   }
 
   get url() {
@@ -238,8 +260,8 @@ export class WcPairing extends EventTarget {
     await this.channel.request<true>({ method: "wc_pairingExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
   }
 
-  async delete(params: RpcError = new WcUserDisconnectedError()) {
-    await this.channel.publish({ method: "wc_pairingDelete", params })
+  async delete(params: RpcError = new WcUserDisconnectedError(), signal = new AbortController().signal): Promise<void> {
+    await this.channel.request<true>({ method: "wc_pairingDelete", params }, signal).then(r => r.getOrThrow())
   }
 
 }

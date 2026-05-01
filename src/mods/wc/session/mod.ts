@@ -133,7 +133,7 @@ export class WcSession extends EventTarget {
     if (request.method === "wc_sessionRequest")
       return this.#onSessionRequest(event)
     if (request.method === "wc_sessionDelete")
-      return
+      return this.#onSessionDelete(event)
 
     return
   }
@@ -181,6 +181,16 @@ export class WcSession extends EventTarget {
     event.respondWith(subevent.response)
   }
 
+  #onSessionDelete(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<RpcErrorInit>
+
+    const subevent = new DataEvent("deleted", { data: request.params })
+
+    this.dispatchEvent(subevent)
+
+    event.respondWith(true)
+  }
+
   async open() {
     await this.channel.open()
   }
@@ -205,8 +215,8 @@ export class WcSession extends EventTarget {
     await this.channel.request<true>({ method: "wc_sessionExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
   }
 
-  async delete(params: RpcError = new WcUserDisconnectedError()): Promise<void> {
-    await this.channel.publish({ method: "wc_sessionDelete", params })
+  async delete(params: RpcError = new WcUserDisconnectedError(), signal = new AbortController().signal): Promise<void> {
+    await this.channel.request<true>({ method: "wc_sessionDelete", params }, signal).then(r => r.getOrThrow())
   }
 
 }
