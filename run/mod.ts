@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-unused-vars no-process-global
+// deno-lint-ignore-file no-process-global
 
 import { IrnClient } from "@/mods/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
