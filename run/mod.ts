@@ -225,16 +225,11 @@ async function onevent(data: WcEventAndChain) {
 
 console.log("Pairing...")
 
-/**
- * Start by pairing
- */
 const session = process.argv[2] ? await respond(process.argv[2]) : await propose()
 
 console.log("Session paired")
 
 await new Promise(resolve => setTimeout(resolve, 1000))
-
-console.log("Simulating disconnection...")
 
 session.channel.client.socket.close()
 
