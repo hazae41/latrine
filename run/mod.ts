@@ -255,6 +255,4 @@ if (session2 != null) {
 
   await session2.delete()
   await session2.close()
-
-  console.log("Session closed")
 }
