@@ -144,6 +144,8 @@ export class WcSession extends EventTarget {
     const subevent = new DataEvent("settled", { data: request.params })
 
     this.dispatchEvent(subevent)
+
+    event.respondWith(true)
   }
 
   #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
