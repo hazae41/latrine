@@ -70,8 +70,6 @@ export namespace WcPairingParams {
 export interface WcPairingEventMap {
   ping: Event
 
-  error: Event
-
   close: CloseEvent
 
   proposal: DataRespondableEvent<WcSessionProposeParams, WcSessionProposeResult>
@@ -90,9 +88,7 @@ export class WcPairing extends EventTarget {
   ) {
     super()
 
-    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.channel.closed })
-    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.channel.closed })
-
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
   }
 
@@ -131,12 +127,6 @@ export class WcPairing extends EventTarget {
     const { reason } = event
 
     const subevent = new CloseEvent("close", { reason })
-
-    this.dispatchEvent(subevent)
-  }
-
-  #onChannelError() {
-    const subevent = new Event("error")
 
     this.dispatchEvent(subevent)
   }

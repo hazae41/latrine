@@ -61,8 +61,6 @@ export interface WcSessionDeleteParams {
 export interface WcSessionEventMap {
   ping: Event
 
-  error: Event
-
   close: CloseEvent
 
   event: DataEvent<WcEventAndChain>
@@ -78,17 +76,13 @@ export class WcSession extends EventTarget {
 
   readonly channel: WcChannel
 
-  readonly #aborter = new AbortController()
-
   constructor(channel: WcChannel) {
     super()
 
     this.channel = channel
 
-    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
-    channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.closed })
-
     channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
   }
 
   addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -109,16 +103,6 @@ export class WcSession extends EventTarget {
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
-
-    this.#aborter.abort()
-  }
-
-  #onChannelError() {
-    const subevent = new Event("error")
-
-    this.dispatchEvent(subevent)
-
-    this.#aborter.abort()
   }
 
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {

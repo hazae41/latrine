@@ -36,7 +36,6 @@ export namespace SafeRpc {
       responded.resolve(response)
     }, { signal: cleaner.signal })
 
-    socket.addEventListener("error", responded.reject, { signal: cleaner.signal })
     socket.addEventListener("close", responded.reject, { signal: cleaner.signal })
     signal.addEventListener("abort", responded.reject, { signal: cleaner.signal })
 

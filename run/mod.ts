@@ -200,6 +200,9 @@ async function resume(saved: WcSave) {
 
   await session.open()
 
+  if (session.closed.aborted)
+    return
+
   return session
 }
 
@@ -243,15 +246,15 @@ console.log("Resuming session...")
 
 const session2 = await resume(await save(session))
 
-console.log("Session resumed")
+if (session2 != null) {
+  console.log("Session resumed")
 
-// await new Promise(resolve => setTimeout(resolve, 5000))
+  await new Promise(resolve => setTimeout(resolve, 5000))
 
-// console.log("Closing session...")
+  console.log("Closing session...")
 
-// /**
-//  * Close the session
-//  */
-// await session2.delete()
+  await session2.delete()
+  await session2.close()
 
-// console.log("Session closed")
+  console.log("Session closed")
+}

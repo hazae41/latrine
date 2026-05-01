@@ -151,8 +151,6 @@ export const ENGINE_RPC_OPTS: Record<string, { req: RpcOpts, res: RpcOpts }> = {
 } as const
 
 export interface WcChannelEventMap {
-  error: Event
-
   close: CloseEvent
 
   request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
@@ -162,7 +160,7 @@ export interface WcChannelEventMap {
 
 export class WcChannel extends EventTarget {
 
-  readonly #aborter = new AbortController()
+  readonly #closed = new AbortController()
 
   #cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher
 
@@ -181,12 +179,8 @@ export class WcChannel extends EventTarget {
 
     this.#cipher = ChaCha20Poly1305Cipher.importOrThrow(Memory.fromOrThrow(key))
 
-    const { signal } = this.#aborter
-
-    client.addEventListener("close", this.#onClientClose.bind(this), { signal })
-    client.addEventListener("error", this.#onClientError.bind(this), { signal })
-
-    client.addEventListener("request", this.#onClientRequest.bind(this), { signal })
+    client.addEventListener("request", this.#onClientRequest.bind(this), { signal: this.closed })
+    client.addEventListener("close", this.#onClientClose.bind(this), { signal: this.closed })
   }
 
   [Symbol.dispose]() {
@@ -202,25 +196,20 @@ export class WcChannel extends EventTarget {
   }
 
   get closed() {
-    return this.#aborter.signal
+    return this.#closed.signal
   }
 
   #onClientClose(event: CloseEvent) {
+    if (this.closed.aborted)
+      return
+
     const { reason } = event
 
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
 
-    this.#aborter.abort()
-  }
-
-  #onClientError() {
-    const subevent = new Event("error")
-
-    this.dispatchEvent(subevent)
-
-    this.#aborter.abort()
+    this.#closed.abort(reason)
   }
 
   #onClientRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -420,7 +409,7 @@ export class WcChannel extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    this.#aborter.abort()
+    this.#closed.abort(reason)
   }
 
 }

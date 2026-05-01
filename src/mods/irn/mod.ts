@@ -26,8 +26,6 @@ export interface IrnMessage {
 }
 
 export interface IrnClientEventMap {
-  error: Event
-
   close: CloseEvent
 
   request: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>
@@ -35,18 +33,15 @@ export interface IrnClientEventMap {
 
 export class IrnClient extends EventTarget {
 
-  readonly #aborter = new AbortController()
+  readonly #closed = new AbortController()
 
   constructor(
     readonly socket: WebSocket
   ) {
     super()
 
-    const { signal } = this.#aborter
-
-    socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal })
-    socket.addEventListener("close", this.#onSocketClose.bind(this), { signal })
-    socket.addEventListener("error", this.#onSocketError.bind(this), { signal })
+    socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal: this.closed })
+    socket.addEventListener("close", this.#onSocketClose.bind(this), { signal: this.closed })
   }
 
   static async open(relay: string, jwk: Uint8Array<ArrayBuffer>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
@@ -64,7 +59,6 @@ export class IrnClient extends EventTarget {
     opened.promise.catch(() => { })
 
     socket.addEventListener("open", opened.resolve, { signal: cleaner.signal })
-    socket.addEventListener("error", opened.reject, { signal: cleaner.signal })
     signal.addEventListener("abort", opened.reject, { signal: cleaner.signal })
 
     await opened.promise
@@ -85,7 +79,7 @@ export class IrnClient extends EventTarget {
   }
 
   get closed() {
-    return this.#aborter.signal
+    return this.#closed.signal
   }
 
   get relay() {
@@ -93,21 +87,16 @@ export class IrnClient extends EventTarget {
   }
 
   #onSocketClose(event: CloseEvent) {
+    if (this.closed.aborted)
+      return
+
     const { reason } = event
 
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
 
-    this.#aborter.abort()
-  }
-
-  #onSocketError() {
-    const subevent = new Event("error")
-
-    this.dispatchEvent(subevent)
-
-    this.#aborter.abort()
+    this.#closed.abort(reason)
   }
 
   #onSocketMessage(event: MessageEvent<unknown>) {
@@ -182,13 +171,7 @@ export class IrnClient extends EventTarget {
   }
 
   close(reason?: string) {
-    const subevent = new CloseEvent("close", { reason })
-
-    this.dispatchEvent(subevent)
-
-    this.socket.close()
-
-    this.#aborter.abort()
+    this.socket.close(undefined, reason)
   }
 
 }
