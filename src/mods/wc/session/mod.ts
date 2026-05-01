@@ -188,6 +188,7 @@ export class WcSession extends EventTarget {
 
     this.dispatchEvent(subevent)
 
+    event.waitUntil(this.close())
     event.respondWith(true)
   }
 

@@ -184,6 +184,7 @@ export class WcPairing extends EventTarget {
 
     this.dispatchEvent(subevent)
 
+    event.waitUntil(this.close())
     event.respondWith(true)
   }
 

@@ -365,6 +365,8 @@ export class WcChannel extends EventTarget {
 
     const promise = this.#wait<T>(id, signal)
 
+    promise.catch(() => { })
+
     await this.client.publish(payload)
 
     const response = await promise
