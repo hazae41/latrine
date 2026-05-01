@@ -40,13 +40,18 @@ const optionalNamespaces = {
   }
 }
 
-const jwk = crypto.getRandomValues(new Uint8Array(32))
+interface User {
+  readonly wcs: WcSession,
+  readonly jwk: Uint8Array
+}
 
 async function propose(signal = new AbortController().signal) {
   await using stack = new AsyncDisposableStack()
 
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
+
+  const jwk = crypto.getRandomValues(new Uint8Array(32))
 
   const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
@@ -93,7 +98,7 @@ async function propose(signal = new AbortController().signal) {
 
   success = true
 
-  return session
+  return { wcs: session, jwk } satisfies User
 }
 
 async function respond(url: string, signal = new AbortController().signal) {
@@ -101,6 +106,8 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
+
+  const jwk = crypto.getRandomValues(new Uint8Array(32))
 
   const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
@@ -170,28 +177,31 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   success = true
 
-  return session
+  return { wcs: session, jwk } satisfies User
 }
 
-interface WcSave {
-  readonly channel: { topic: string, key: string }
+interface UserData {
+  readonly tpc: string
+  readonly key: string
+  readonly jwk: string
 }
 
-async function save(session: WcSession) {
-  const topic = session.channel.topic
-  const key = session.channel.key.toBase64()
+async function save(user: User) {
+  const tpc = user.wcs.channel.topic
+  const key = user.wcs.channel.key.toBase64()
+  const jwk = user.jwk.toBase64()
 
-  const channel = { topic, key }
-
-  return { channel } satisfies WcSave
+  return { tpc, key, jwk } satisfies UserData
 }
 
-async function resume(saved: WcSave) {
-  const key = Uint8Array.fromBase64(saved.channel.key)
+async function resume(save: UserData) {
+  const tpc = save.tpc
+  const key = Uint8Array.fromBase64(save.key)
+  const jwk = Uint8Array.fromBase64(save.jwk)
 
   const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
-  const channel = new WcChannel(client, saved.channel.topic, key)
+  const channel = new WcChannel(client, tpc, key)
   const session = new WcSession(channel)
 
   session.addEventListener("event", event => onevent(event.data), { signal: session.closed })
@@ -203,7 +213,7 @@ async function resume(saved: WcSave) {
   if (session.closed.aborted)
     return
 
-  return session
+  return { wcs: session, jwk } satisfies User
 }
 
 async function onrequest(data: WcSessionRequestParams<unknown>) {
@@ -231,7 +241,7 @@ console.log("Session paired")
 
 await new Promise(resolve => setTimeout(resolve, 1000))
 
-session.channel.client.socket.close()
+session.wcs.channel.client.socket.close()
 
 console.log("Session disconnected")
 
@@ -248,8 +258,8 @@ if (session2 != null) {
 
   console.log("Closing session...")
 
-  await session2.delete()
-  await session2.close()
+  await session2.wcs.delete()
+  await session2.wcs.close()
 }
 
 console.log("Finished")
