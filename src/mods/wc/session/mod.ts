@@ -215,7 +215,7 @@ export class WcSession extends EventTarget {
     await this.channel.request<true>({ method: "wc_sessionExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
   }
 
-  async delete(params: RpcError = new WcUserDisconnectedError(), signal = new AbortController().signal): Promise<void> {
+  async delete(params: RpcError = new WcUserDisconnectedError(), signal = AbortSignal.abort()): Promise<void> {
     await this.channel.request<true>({ method: "wc_sessionDelete", params }, signal).then(r => r.getOrThrow())
   }
 

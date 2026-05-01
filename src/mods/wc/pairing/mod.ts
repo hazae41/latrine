@@ -260,7 +260,7 @@ export class WcPairing extends EventTarget {
     await this.channel.request<true>({ method: "wc_pairingExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
   }
 
-  async delete(params: RpcError = new WcUserDisconnectedError(), signal = new AbortController().signal): Promise<void> {
+  async delete(params: RpcError = new WcUserDisconnectedError(), signal = AbortSignal.abort()): Promise<void> {
     await this.channel.request<true>({ method: "wc_pairingDelete", params }, signal).then(r => r.getOrThrow())
   }
 
