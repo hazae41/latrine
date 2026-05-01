@@ -245,8 +245,6 @@ const session2 = await resume(await save(session))
 
 console.log("Session resumed")
 
-session2.addEventListener("close", () => console.log("Session closed"), { signal: session2.closed })
-
 // await new Promise(resolve => setTimeout(resolve, 5000))
 
 // console.log("Closing session...")

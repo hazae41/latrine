@@ -95,19 +95,19 @@ export class IrnClient extends EventTarget {
   #onSocketClose(event: CloseEvent) {
     const { reason } = event
 
-    this.#aborter.abort()
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
   #onSocketError() {
-    this.#aborter.abort()
-
     const subevent = new Event("error")
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
   #onSocketMessage(event: MessageEvent<unknown>) {
@@ -182,13 +182,13 @@ export class IrnClient extends EventTarget {
   }
 
   close(reason?: string) {
-    this.#aborter.abort()
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
 
     this.socket.close()
+
+    this.#aborter.abort()
   }
 
 }

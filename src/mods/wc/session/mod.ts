@@ -106,19 +106,19 @@ export class WcSession extends EventTarget {
   #onChannelClose(event: CloseEvent) {
     const { reason } = event
 
-    this.#aborter.abort()
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
   #onChannelError() {
-    this.#aborter.abort()
-
     const subevent = new Event("error")
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {

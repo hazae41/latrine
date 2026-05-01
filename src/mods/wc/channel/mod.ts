@@ -208,19 +208,19 @@ export class WcChannel extends EventTarget {
   #onClientClose(event: CloseEvent) {
     const { reason } = event
 
-    this.#aborter.abort()
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
   #onClientError() {
-    this.#aborter.abort()
-
     const subevent = new Event("error")
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
   #onClientRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -416,11 +416,11 @@ export class WcChannel extends EventTarget {
 
     await this.unsubscribe()
 
-    this.#aborter.abort()
-
     const subevent = new CloseEvent("close", { reason })
 
     this.dispatchEvent(subevent)
+
+    this.#aborter.abort()
   }
 
 }
