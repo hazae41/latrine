@@ -59,7 +59,7 @@ const pairing = await WcPairing.from(client, WcPairingParams.parse(url))
 
 pairing.addEventListener("propose", event => {
   event.respondWith(pairing.respond(event.data))
-}, { signal: cleaner.signal })
+})
 
 pairing.addEventListener("upgrade", async e => {
   const session = e.data
