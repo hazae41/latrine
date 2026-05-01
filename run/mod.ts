@@ -235,13 +235,13 @@ async function onevent(data: WcEventAndChain) {
 
 console.log("Pairing...")
 
-const session = process.argv[2] ? await respond(process.argv[2]) : await propose()
+const user = process.argv[2] ? await respond(process.argv[2]) : await propose()
 
 console.log("Session paired")
 
 await new Promise(resolve => setTimeout(resolve, 1000))
 
-session.wcs.channel.client.socket.close()
+user.wcs.channel.client.socket.close()
 
 console.log("Session disconnected")
 
@@ -249,17 +249,17 @@ await new Promise(resolve => setTimeout(resolve, 10000))
 
 console.log("Resuming session...")
 
-const session2 = await resume(await save(session))
+const user2 = await resume(await save(user))
 
-if (session2 != null) {
+if (user2 != null) {
   console.log("Session resumed")
 
   await new Promise(resolve => setTimeout(resolve, 5000))
 
   console.log("Closing session...")
 
-  await session2.wcs.delete()
-  await session2.wcs.close()
+  await user2.wcs.delete()
+  await user2.wcs.close()
 }
 
 console.log("Finished")
