@@ -56,6 +56,7 @@ async function propose(signal = new AbortController().signal) {
 
   const upgraded = Promise.withResolvers<WcSession>()
   stack.defer(() => upgraded.reject())
+  upgraded.promise.catch(() => { })
 
   pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
@@ -73,12 +74,13 @@ async function propose(signal = new AbortController().signal) {
   session.addEventListener("event", event => console.log(event.data))
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)))
 
-  const settle = Promise.withResolvers<WcSessionSettleParams>()
-  stack.defer(() => settle.reject())
+  const settled = Promise.withResolvers<WcSessionSettleParams>()
+  stack.defer(() => settled.reject())
+  settled.promise.catch(() => { })
 
-  session.addEventListener("settled", event => settle.resolve(event.data), { signal: cleaner.signal })
-  session.addEventListener("close", settle.reject, { signal: cleaner.signal })
-  signal.addEventListener("abort", settle.reject, { signal: cleaner.signal })
+  session.addEventListener("settled", event => settled.resolve(event.data), { signal: cleaner.signal })
+  session.addEventListener("close", settled.reject, { signal: cleaner.signal })
+  signal.addEventListener("abort", settled.reject, { signal: cleaner.signal })
 
   await session.open()
 
@@ -87,11 +89,11 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())
 
-  const settled = await settle.promise
+  const settlement = await settled.promise
 
   success = true
 
-  return { session, settled }
+  return { session, settled: settlement }
 }
 
 async function respond(url: string, signal = new AbortController().signal) {
@@ -106,6 +108,7 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   const upgraded = Promise.withResolvers<WcSession>()
   stack.defer(() => upgraded.reject())
+  upgraded.promise.catch(() => { })
 
   pairing.addEventListener("proposal", event => event.respondWith(onpropose(event.data)), { signal: cleaner.signal })
   pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })

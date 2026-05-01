@@ -59,14 +59,15 @@ export class IrnClient extends EventTarget {
 
     const socket = new WebSocket(`${relay}/?auth=${jwt}&projectId=${projectId}`)
 
-    const { resolve, reject, promise } = Promise.withResolvers()
-    stack.defer(() => reject())
+    const opened = Promise.withResolvers()
+    stack.defer(() => opened.reject())
+    opened.promise.catch(() => { })
 
-    socket.addEventListener("open", resolve, { signal: cleaner.signal })
-    socket.addEventListener("error", reject, { signal: cleaner.signal })
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+    socket.addEventListener("open", opened.resolve, { signal: cleaner.signal })
+    socket.addEventListener("error", opened.reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", opened.reject, { signal: cleaner.signal })
 
-    await promise
+    await opened.promise
 
     return new IrnClient(socket)
   }

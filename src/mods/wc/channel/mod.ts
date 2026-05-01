@@ -270,9 +270,13 @@ export class WcChannel extends EventTarget {
 
     this.#acks.add(request.id)
 
+    console.log("->", request)
+
     const result = await Result.runAndWrap(() => this.#respond(request))
 
     const response = RpcResponse.rewrap(request.id, result)
+
+    console.log("<-", response)
 
     const { topic } = this
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[request.method].res
@@ -350,6 +354,8 @@ export class WcChannel extends EventTarget {
   async request<T>(init: RpcRequestPreinit<unknown>, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
+    console.log("<-", request)
+
     const { topic } = this
     const message = this.#encryptOrThrow(request)
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
@@ -362,7 +368,11 @@ export class WcChannel extends EventTarget {
 
     await this.client.publish(payload)
 
-    return await promise
+    const response = await promise
+
+    console.log("->", response)
+
+    return response
   }
 
   async #wait<T>(id: RpcId, signal = new AbortController().signal): Promise<RpcResponse<T>> {
@@ -371,8 +381,9 @@ export class WcChannel extends EventTarget {
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const { resolve, reject, promise } = Promise.withResolvers<RpcResponse<T>>()
-    stack.defer(() => reject())
+    const responded = Promise.withResolvers<RpcResponse<T>>()
+    stack.defer(() => responded.reject())
+    responded.promise.catch(() => { })
 
     this.addEventListener("response", (event: DataEvent<RpcResponseInit<unknown>>) => {
       const init = event.data as RpcResponseInit<T>
@@ -380,13 +391,13 @@ export class WcChannel extends EventTarget {
       if (init.id !== id)
         return
 
-      resolve(RpcResponse.from<T>(init))
+      responded.resolve(RpcResponse.from<T>(init))
     }, { signal: cleaner.signal })
 
-    this.addEventListener("close", reject, { signal: cleaner.signal })
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+    this.addEventListener("close", responded.reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", responded.reject, { signal: cleaner.signal })
 
-    return await promise
+    return await responded.promise
   }
 
   async open() {

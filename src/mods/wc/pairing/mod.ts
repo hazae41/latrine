@@ -144,16 +144,7 @@ export class WcPairing extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
-    if (request.method === "wc_sessionPropose")
-      return this.#onSessionPropose(event)
-
     return
-  }
-
-  #onSessionPropose(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
-    const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
-
-
   }
 
   get url() {
@@ -208,9 +199,11 @@ export class WcPairing extends EventTarget {
 
     const proposed = Promise.withResolvers<WcSessionProposeParams>()
     stack.defer(() => proposed.reject())
+    proposed.promise.catch(() => { })
 
     const responded = Promise.withResolvers<unknown>()
     stack.defer(() => responded.reject(new WcUserRejectedError()))
+    responded.promise.catch(() => { })
 
     this.channel.addEventListener("request", (event) => {
       const request = event.data as RpcRequestPreinit<WcSessionProposeParams>

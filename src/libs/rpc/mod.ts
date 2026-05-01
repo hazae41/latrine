@@ -17,8 +17,9 @@ export namespace SafeRpc {
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const { reject, resolve, promise } = Promise.withResolvers<RpcResponse<T>>()
-    stack.defer(() => reject())
+    const responded = Promise.withResolvers<RpcResponse<T>>()
+    stack.defer(() => responded.reject())
+    responded.promise.catch(() => { })
 
     const request = SafeRpc.prepare(init)
 
@@ -32,16 +33,16 @@ export namespace SafeRpc {
       if (response.id !== request.id)
         return
 
-      resolve(response)
+      responded.resolve(response)
     }, { signal: cleaner.signal })
 
-    socket.addEventListener("error", reject, { signal: cleaner.signal })
-    socket.addEventListener("close", reject, { signal: cleaner.signal })
-    signal.addEventListener("abort", reject, { signal: cleaner.signal })
+    socket.addEventListener("error", responded.reject, { signal: cleaner.signal })
+    socket.addEventListener("close", responded.reject, { signal: cleaner.signal })
+    signal.addEventListener("abort", responded.reject, { signal: cleaner.signal })
 
     socket.send(SafeJson.stringify(request))
 
-    return await promise
+    return await responded.promise
   }
 
 }
