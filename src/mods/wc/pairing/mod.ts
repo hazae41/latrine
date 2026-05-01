@@ -1,8 +1,8 @@
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
-import { WcUserDisconnectedError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
+import { WcUserDisconnectedError } from "@/mods/wc/errors/mod.ts";
 import { WcMetadata, WcSessionProposeResult } from "@/mods/wc/mod.ts";
-import { WcSession, WcSessionProposeParams, WcSessionSettleParams } from "@/mods/wc/session/mod.ts";
+import { WcSession, WcSessionProposeParams } from "@/mods/wc/session/mod.ts";
 import { RpcError, RpcErrorInit, RpcRequestPreinit } from "@hazae41/jsonrpc";
 import { DataEvent, DataRespondableEvent } from "@hazae41/plume";
 import { Option } from "@hazae41/result-and-option";
@@ -207,7 +207,7 @@ export class WcPairing extends EventTarget {
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
   }
 
-  async respond(params: WcRespondParams, signal = new AbortController().signal): Promise<WcSessionSettleParams> {
+  async respond(proposal: WcSessionProposeParams, params: WcRespondParams): Promise<WcSessionProposeResult> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -215,47 +215,8 @@ export class WcPairing extends EventTarget {
 
     const { relay } = this.channel.client
 
-    const proposed = Promise.withResolvers<WcSessionProposeParams>()
-    stack.defer(() => proposed.reject())
-    proposed.promise.catch(() => { })
-
-    const responded = Promise.withResolvers<unknown>()
-    stack.defer(() => responded.reject())
-    responded.promise.catch(() => { })
-
-    this.channel.addEventListener("request", (event) => {
-      const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
-
-      if (request.method !== "wc_sessionPropose")
-        return
-
-      proposed.resolve(request.params)
-
-      event.respondWith(responded.promise)
-    }, { signal: cleaner.signal })
-
-    this.channel.addEventListener("close", proposed.reject, { signal: cleaner.signal })
-    signal.addEventListener("abort", proposed.reject, { signal: cleaner.signal })
-
-    const proposal = await proposed.promise
-
-    const subevent = new DataRespondableEvent("proposal", { data: proposal })
-
-    this.dispatchEvent(subevent)
-
-    await subevent.extension
-
-    const response = await subevent.response
-
-    if (response !== true)
-      responded.reject(new WcUserRejectedError())
-
-    await responded.promise
-
     const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
     const selfPubHex = selfPubRaw.toHex()
-
-    responded.resolve({ relay, responderPublicKey: selfPubHex })
 
     const peerPubRaw = Uint8Array.fromHex(proposal.proposer.publicKey)
     const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
@@ -267,10 +228,6 @@ export class WcPairing extends EventTarget {
     const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32))
     const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-    const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
-
-    this.dispatchEvent(new DataEvent("upgraded", { data: session }))
-
     const { self } = params
 
     const { namespaces } = params
@@ -281,7 +238,13 @@ export class WcPairing extends EventTarget {
 
     const controller = { publicKey: selfPubHex, metadata: self }
 
-    return { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
+    const settled = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
+
+    const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw), settled)
+
+    this.dispatchEvent(new DataEvent("upgraded", { data: session }))
+
+    return { relay, responderPublicKey: selfPubHex }
   }
 
   async ping(signal = new AbortController().signal) {

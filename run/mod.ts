@@ -3,7 +3,7 @@
 import { IrnClient } from "@/mods/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcInvalidMethodError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
-import { WalletConnect, WcPairingParams, WcSessionProposeResult, WcSessionRequestParams } from "@/mods/wc/mod.ts";
+import { WalletConnect, WcPairingParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { WcPairing } from "@/mods/wc/pairing/mod.ts";
 import { WcEventAndChain, WcSession, WcSessionProposeParams, WcSessionSettleParams } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
@@ -106,6 +106,8 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   const pairing = await WcPairing.from(client, WcPairingParams.parse(url))
 
+  pairing.addEventListener("proposal", event => event.respondWith(onpropose(pairing, event.data)), { signal: cleaner.signal })
+
   const upgraded = Promise.withResolvers<WcSession>()
   stack.defer(() => upgraded.reject())
   upgraded.promise.catch(() => { })
@@ -114,26 +116,10 @@ async function respond(url: string, signal = new AbortController().signal) {
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
-  const proposed = Promise.withResolvers<WcSessionProposeParams>()
-  stack.defer(() => proposed.reject())
-  proposed.promise.catch(() => { })
-
-  const responded = Promise.withResolvers<WcSessionProposeResult>()
-  stack.defer(() => responded.reject())
-  responded.promise.catch(() => { })
-
-  pairing.addEventListener("proposal", event => { proposed.resolve(event.data); event.respondWith(responded.promise) }, { signal: cleaner.signal })
-  pairing.addEventListener("close", proposed.reject, { signal: cleaner.signal })
-  signal.addEventListener("abort", proposed.reject, { signal: cleaner.signal })
-
   await pairing.open()
 
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
-
-  const proposal = await proposed.promise
-
-  const settled = await pairing.respond({ self, namespaces })
 
   const session = await upgraded.promise
 
@@ -147,7 +133,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())
 
-  await session.settle(await settled)
+  await session.settle(session.settled!)
 
   success = true
 
@@ -183,13 +169,13 @@ async function resume(saved: WcSave) {
   return { session }
 }
 
-async function onpropose(proposed: WcSessionProposeParams) {
-  const peer = proposed.proposer.metadata
+async function onpropose(pairing: WcPairing, proposal: WcSessionProposeParams) {
+  const peer = proposal.proposer.metadata
 
   if (!confirm(`Do you want to connect to ${peer.name}?`))
     throw new WcUserRejectedError()
 
-  return true
+  return pairing.respond(proposal, { self, namespaces })
 }
 
 async function onrequest(data: WcSessionRequestParams<unknown>) {
