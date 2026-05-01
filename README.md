@@ -47,6 +47,8 @@ pairing.addEventListener("upgrade", async e => {
 
 await pairing.open()
 
+console.log(pairing.url)
+
 await pairing.propose(...)
 ```
 
