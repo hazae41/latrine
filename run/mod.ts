@@ -43,7 +43,7 @@ const optionalNamespaces = {
 const jwk = crypto.getRandomValues(new Uint8Array(32))
 
 async function propose(signal = new AbortController().signal) {
-  using stack = new DisposableStack()
+  await using stack = new AsyncDisposableStack()
 
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
@@ -64,8 +64,8 @@ async function propose(signal = new AbortController().signal) {
 
   await pairing.open()
 
-  stack.defer(() => pairing.close().catch(() => { }))
-  stack.defer(() => pairing.delete().catch(() => { }))
+  stack.defer(async () => await pairing.close())
+  stack.defer(async () => await pairing.delete())
 
   await pairing.propose({ self, optionalNamespaces })
 
@@ -85,8 +85,8 @@ async function propose(signal = new AbortController().signal) {
 
   let success = false
 
-  stack.defer(() => success ? undefined : session.close().catch(() => { }))
-  stack.defer(() => success ? undefined : session.delete().catch(() => { }))
+  stack.defer(async () => success ? undefined : await session.close())
+  stack.defer(async () => success ? undefined : await session.delete())
 
   await settled.promise
 
@@ -96,7 +96,7 @@ async function propose(signal = new AbortController().signal) {
 }
 
 async function respond(url: string, signal = new AbortController().signal) {
-  using stack = new DisposableStack()
+  await using stack = new AsyncDisposableStack()
 
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
@@ -131,8 +131,8 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   await pairing.open()
 
-  stack.defer(() => pairing.close().catch(() => { }))
-  stack.defer(() => pairing.delete().catch(() => { }))
+  stack.defer(async () => await pairing.close())
+  stack.defer(async () => await pairing.delete())
 
   const proposal = await proposed.promise
 
@@ -151,8 +151,8 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   let success = false
 
-  stack.defer(() => success ? undefined : session.close().catch(() => { }))
-  stack.defer(() => success ? undefined : session.delete().catch(() => { }))
+  stack.defer(async () => success ? undefined : await session.close())
+  stack.defer(async () => success ? undefined : await session.delete())
 
   const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pairing.keypair.publicKey))
   const selfPubHex = selfPubRaw.toHex()

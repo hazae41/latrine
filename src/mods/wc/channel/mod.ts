@@ -244,14 +244,7 @@ export class WcChannel extends EventTarget {
   }
 
   async #onIrnMessage(message: string) {
-    const written = Uint8Array.fromBase64(message)
-    const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
-
-    const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
-    const decrypted = encrypted.decryptOrThrow(this.#cipher)
-
-    const json = new TextDecoder().decode(decrypted.fragment.bytes)
-    const data = SafeJson.parse(json) as RpcMessageInit
+    const data = this.#decryptOrThrow(message)
 
     if ("method" in data)
       await this.#onRequest(data)
@@ -269,13 +262,9 @@ export class WcChannel extends EventTarget {
 
     this.#acks.add(request.id)
 
-    console.log("->", request)
-
     const result = await Result.runAndWrap(() => this.#respond(request))
 
     const response = RpcResponse.rewrap(request.id, result)
-
-    console.log("<-", response)
 
     const { topic } = this
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[request.method].res
@@ -306,7 +295,24 @@ export class WcChannel extends EventTarget {
     this.dispatchEvent(subevent)
   }
 
+  #decryptOrThrow(message: string): RpcMessageInit {
+    const written = Uint8Array.fromBase64(message)
+    const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
+
+    const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
+    const decrypted = encrypted.decryptOrThrow(this.#cipher)
+
+    const json = new TextDecoder().decode(decrypted.fragment.bytes)
+    const data = SafeJson.parse(json) as RpcMessageInit
+
+    console.log("->", data)
+
+    return data
+  }
+
   #encryptOrThrow(data: unknown): string {
+    console.log("<-", data)
+
     const json = SafeJson.stringify(data)
 
     const nonce = crypto.getRandomValues(new Uint8Array(12))
@@ -353,8 +359,6 @@ export class WcChannel extends EventTarget {
   async request<T>(init: RpcRequestPreinit<unknown>, signal = new AbortController().signal): Promise<RpcResponse<T>> {
     const request = SafeRpc.prepare(init)
 
-    console.log("<-", request)
-
     const { topic } = this
     const message = this.#encryptOrThrow(request)
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
@@ -369,11 +373,7 @@ export class WcChannel extends EventTarget {
 
     await this.client.publish(payload)
 
-    const response = await promise
-
-    console.log("->", response)
-
-    return response
+    return await promise
   }
 
   async #wait<T>(id: RpcId, signal = new AbortController().signal): Promise<RpcResponse<T>> {
