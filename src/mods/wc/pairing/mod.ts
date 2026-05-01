@@ -93,13 +93,13 @@ export class WcPairing extends EventTarget {
   }
 
   static async generate(client: IrnClient) {
-    const topic = crypto.getRandomValues(new Uint8Array(32)).toHex()
-    const symkey = crypto.getRandomValues(new Uint8Array(32))
+    const key = crypto.getRandomValues(new Uint8Array(32))
+    const tpc = new Uint8Array(await crypto.subtle.digest("SHA-256", key)).toHex()
 
-    const channel = new WcChannel(client, topic, symkey)
+    const channel = new WcChannel(client, tpc, key)
     const keypair = await crypto.subtle.generateKey("X25519", false, ["deriveBits"]) as CryptoKeyPair
 
-    return new WcPairing(channel, keypair, { protocol: "wc:", version: "2", relayProtocol: "irn", pairingTopic: topic, symKey: symkey })
+    return new WcPairing(channel, keypair, { protocol: "wc:", version: "2", relayProtocol: "irn", pairingTopic: tpc, symKey: key })
   }
 
   static async from(client: IrnClient, params: WcPairingParams) {
