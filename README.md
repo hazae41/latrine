@@ -48,7 +48,7 @@ await pairing.open()
 await pairing.propose(...)
 ```
 
-See `./run/mod.ts` for a full example
+See [`./run/mod.ts`](./run/mod.ts) for a full example
 
 ### Wallet-side
 
@@ -83,4 +83,4 @@ pairing.addEventListener("upgrade", async e => {
 await pairing.open()
 ```
 
-See `./run/mod.ts` for a full example
+See [`./run/mod.ts`](./run/mod.ts) for a full example
