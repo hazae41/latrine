@@ -115,12 +115,13 @@ async function respond(url: string, signal = new AbortController().signal) {
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
+  const settled = pairing.respond({ self, namespaces })
+  settled.catch(() => { })
+
   await pairing.open()
 
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
-
-  const settled = await pairing.respond({ self, namespaces })
 
   const session = await upgraded.promise
 
@@ -134,7 +135,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())
 
-  await session.settle(settled)
+  await session.settle(await settled)
 
   success = true
 

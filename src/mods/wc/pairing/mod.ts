@@ -202,7 +202,7 @@ export class WcPairing extends EventTarget {
     proposed.promise.catch(() => { })
 
     const responded = Promise.withResolvers<unknown>()
-    stack.defer(() => responded.reject(new WcUserRejectedError()))
+    stack.defer(() => responded.reject())
     responded.promise.catch(() => { })
 
     this.channel.addEventListener("request", (event) => {
@@ -231,7 +231,9 @@ export class WcPairing extends EventTarget {
     const response = await subevent.response
 
     if (response !== true)
-      throw new WcUserRejectedError()
+      responded.reject(new WcUserRejectedError())
+
+    await responded.promise
 
     const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
     const selfPubHex = selfPubRaw.toHex()
