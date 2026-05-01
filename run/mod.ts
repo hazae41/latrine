@@ -3,7 +3,7 @@
 import { IrnClient } from "@/mods/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcInvalidMethodError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
-import { WalletConnect, WcPairingParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
+import { WalletConnect, WcPairingParams, WcSessionProposeResult, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { WcPairing } from "@/mods/wc/pairing/mod.ts";
 import { WcEventAndChain, WcSession, WcSessionProposeParams, WcSessionSettleParams } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
@@ -110,18 +110,30 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(() => upgraded.reject())
   upgraded.promise.catch(() => { })
 
-  pairing.addEventListener("proposal", event => event.respondWith(onpropose(event.data)), { signal: cleaner.signal })
   pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
-  const settled = pairing.respond({ self, namespaces })
-  settled.catch(() => { })
+  const proposed = Promise.withResolvers<WcSessionProposeParams>()
+  stack.defer(() => proposed.reject())
+  proposed.promise.catch(() => { })
+
+  const responded = Promise.withResolvers<WcSessionProposeResult>()
+  stack.defer(() => responded.reject())
+  responded.promise.catch(() => { })
+
+  pairing.addEventListener("proposal", event => { proposed.resolve(event.data); event.respondWith(responded.promise) }, { signal: cleaner.signal })
+  pairing.addEventListener("close", proposed.reject, { signal: cleaner.signal })
+  signal.addEventListener("abort", proposed.reject, { signal: cleaner.signal })
 
   await pairing.open()
 
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
+
+  const proposal = await proposed.promise
+
+  const settled = await pairing.respond({ self, namespaces })
 
   const session = await upgraded.promise
 

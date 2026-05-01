@@ -149,7 +149,6 @@ export class WcSession extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    event.stopImmediatePropagation()
     event.respondWith(true)
   }
 
@@ -160,7 +159,6 @@ export class WcSession extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    event.stopImmediatePropagation()
     event.respondWith(true)
   }
 
@@ -176,7 +174,6 @@ export class WcSession extends EventTarget {
     if (subevent.response == null)
       return
 
-    event.stopImmediatePropagation()
     event.respondWith(subevent.response)
   }
 

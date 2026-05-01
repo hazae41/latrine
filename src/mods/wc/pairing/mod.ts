@@ -74,7 +74,7 @@ export interface WcPairingEventMap {
 
   close: CloseEvent
 
-  proposal: DataRespondableEvent<WcSessionProposeParams, boolean>
+  proposal: DataRespondableEvent<WcSessionProposeParams, WcSessionProposeResult>
 
   upgraded: DataEvent<WcSession>
 
@@ -144,7 +144,25 @@ export class WcPairing extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
+    if (request.method === "wc_sessionPropose")
+      return this.#onSessionPropose(event)
+
     return
+  }
+
+  #onSessionPropose(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
+
+    const subevent = new DataRespondableEvent("proposal", { data: request.params })
+
+    this.dispatchEvent(subevent)
+
+    event.waitUntil(subevent.extension)
+
+    if (subevent.response == null)
+      return
+
+    event.respondWith(subevent.response)
   }
 
   get url() {
@@ -213,7 +231,6 @@ export class WcPairing extends EventTarget {
 
       proposed.resolve(request.params)
 
-      event.stopImmediatePropagation()
       event.respondWith(responded.promise)
     }, { signal: cleaner.signal })
 

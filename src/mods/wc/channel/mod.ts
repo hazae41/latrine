@@ -240,7 +240,6 @@ export class WcChannel extends EventTarget {
 
     this.#onIrnMessage(request.params.data.message).catch(console.error)
 
-    event.stopImmediatePropagation()
     event.respondWith(true)
   }
 
