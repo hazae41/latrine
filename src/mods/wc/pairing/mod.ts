@@ -207,7 +207,7 @@ export class WcPairing extends EventTarget {
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
   }
 
-  async respond(proposal: WcSessionProposeParams, params: WcRespondParams): Promise<WcSessionProposeResult> {
+  async respond(proposal: WcSessionProposeParams): Promise<WcSessionProposeResult> {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()
@@ -228,19 +228,7 @@ export class WcPairing extends EventTarget {
     const sessionKeyRaw = new Uint8Array(await crypto.subtle.deriveBits(hkdfAlg, hkdfKey, 8 * 32))
     const sessionTpcHex = new Uint8Array(await crypto.subtle.digest("SHA-256", sessionKeyRaw)).toHex()
 
-    const { self } = params
-
-    const { namespaces } = params
-
-    const { requiredNamespaces, optionalNamespaces } = proposal
-
-    const { expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60) } = params
-
-    const controller = { publicKey: selfPubHex, metadata: self }
-
-    const settled = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: this.channel.topic, controller, expiry }
-
-    const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw), settled)
+    const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
     this.dispatchEvent(new DataEvent("upgraded", { data: session }))
 

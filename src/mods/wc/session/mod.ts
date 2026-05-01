@@ -80,13 +80,10 @@ export class WcSession extends EventTarget {
 
   readonly #aborter = new AbortController()
 
-  #settled?: WcSessionSettleParams
-
-  constructor(channel: WcChannel, settled?: WcSessionSettleParams) {
+  constructor(channel: WcChannel) {
     super()
 
     this.channel = channel
-    this.#settled = settled
 
     channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
     channel.addEventListener("error", this.#onChannelError.bind(this), { signal: this.closed })
@@ -100,10 +97,6 @@ export class WcSession extends EventTarget {
 
   addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
     super.addEventListener(type, callback, options)
-  }
-
-  get settled() {
-    return this.#settled
   }
 
   get closed() {
