@@ -65,11 +65,11 @@ export interface WcSessionEventMap {
 
   event: DataEvent<WcEventAndChain>
 
-  settled: DataEvent<WcSessionSettleParams>
+  settle: DataEvent<WcSessionSettleParams>
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 
-  deleted: DataEvent<RpcErrorInit>
+  delete: DataEvent<RpcErrorInit>
 }
 
 export class WcSession extends EventTarget {
@@ -125,7 +125,7 @@ export class WcSession extends EventTarget {
   #onSessionSettle(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data as RpcRequestPreinit<WcSessionSettleParams>
 
-    const subevent = new DataEvent("settled", { data: request.params })
+    const subevent = new DataEvent("settle", { data: request.params })
 
     this.dispatchEvent(subevent)
 
@@ -168,7 +168,7 @@ export class WcSession extends EventTarget {
   #onSessionDelete(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data as RpcRequestPreinit<RpcErrorInit>
 
-    const subevent = new DataEvent("deleted", { data: request.params })
+    const subevent = new DataEvent("delete", { data: request.params })
 
     this.dispatchEvent(subevent)
 

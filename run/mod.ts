@@ -16,7 +16,7 @@ chaCha20Poly1305.set(chaCha20Poly1305.fromWasm(chaCha20Poly1305Wasm))
 const address = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
 const chains = [1]
 
-const self = {
+const metadata = {
   name: "Latrine",
   description: "Alternative WalletConnect client",
   url: "https://github.com/hazae41/latrine",
@@ -63,7 +63,7 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(() => upgraded.reject())
   upgraded.promise.catch(() => { })
 
-  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+  pairing.addEventListener("upgrade", event => upgraded.resolve(event.data), { signal: cleaner.signal })
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
@@ -72,7 +72,7 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
 
-  await pairing.propose({ self, optionalNamespaces })
+  await pairing.propose({ self: metadata, optionalNamespaces })
 
   const session = await upgraded.promise
 
@@ -83,7 +83,7 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(() => settled.reject())
   settled.promise.catch(() => { })
 
-  session.addEventListener("settled", event => settled.resolve(event.data), { signal: cleaner.signal })
+  session.addEventListener("settle", event => settled.resolve(event.data), { signal: cleaner.signal })
   session.addEventListener("close", settled.reject, { signal: cleaner.signal })
   signal.addEventListener("abort", settled.reject, { signal: cleaner.signal })
 
@@ -121,7 +121,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(() => responded.reject())
   responded.promise.catch(() => { })
 
-  pairing.addEventListener("proposal", event => {
+  pairing.addEventListener("propose", event => {
     const proposal = event.data
 
     proposed.resolve(proposal)
@@ -133,7 +133,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(() => upgraded.reject())
   upgraded.promise.catch(() => { })
 
-  pairing.addEventListener("upgraded", event => upgraded.resolve(event.data), { signal: cleaner.signal })
+  pairing.addEventListener("upgrade", event => upgraded.resolve(event.data), { signal: cleaner.signal })
   pairing.addEventListener("close", upgraded.reject, { signal: cleaner.signal })
   signal.addEventListener("abort", upgraded.reject, { signal: cleaner.signal })
 
@@ -163,14 +163,12 @@ async function respond(url: string, signal = new AbortController().signal) {
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())
 
-  const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", pairing.keypair.publicKey))
-  const selfPubHex = selfPubRaw.toHex()
+  const relay = session.channel.client.relay
 
   const { requiredNamespaces, optionalNamespaces } = proposal
 
-  const controller = { publicKey: selfPubHex, metadata: self }
+  const controller = { publicKey: new Uint8Array(await crypto.subtle.exportKey("raw", pairing.keypair.publicKey)).toHex(), metadata }
 
-  const relay = session.channel.client.relay
   const expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60)
 
   await session.settle({ relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: pairing.channel.topic, controller, expiry })

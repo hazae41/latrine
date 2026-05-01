@@ -72,11 +72,11 @@ export interface WcPairingEventMap {
 
   close: CloseEvent
 
-  proposal: DataRespondableEvent<WcSessionProposeParams, WcSessionProposeResult>
+  propose: DataRespondableEvent<WcSessionProposeParams, WcSessionProposeResult>
 
-  upgraded: DataEvent<WcSession>
+  upgrade: DataEvent<WcSession>
 
-  deleted: DataEvent<RpcErrorInit>
+  delete: DataEvent<RpcErrorInit>
 }
 
 export class WcPairing extends EventTarget {
@@ -147,7 +147,7 @@ export class WcPairing extends EventTarget {
   #onSessionPropose(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data as RpcRequestPreinit<WcSessionProposeParams>
 
-    const subevent = new DataRespondableEvent("proposal", { data: request.params })
+    const subevent = new DataRespondableEvent("propose", { data: request.params })
 
     this.dispatchEvent(subevent)
 
@@ -170,7 +170,7 @@ export class WcPairing extends EventTarget {
   #onPairingDelete(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data as RpcRequestPreinit<RpcErrorInit>
 
-    const subevent = new DataEvent("deleted", { data: request.params })
+    const subevent = new DataEvent("delete", { data: request.params })
 
     this.dispatchEvent(subevent)
 
@@ -217,7 +217,7 @@ export class WcPairing extends EventTarget {
 
     const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
-    this.dispatchEvent(new DataEvent("upgraded", { data: session }))
+    this.dispatchEvent(new DataEvent("upgrade", { data: session }))
   }
 
   async respond(proposal: WcSessionProposeParams): Promise<WcSessionProposeResult> {
@@ -238,7 +238,7 @@ export class WcPairing extends EventTarget {
 
     const session = new WcSession(new WcChannel(this.channel.client, sessionTpcHex, sessionKeyRaw))
 
-    this.dispatchEvent(new DataEvent("upgraded", { data: session }))
+    this.dispatchEvent(new DataEvent("upgrade", { data: session }))
 
     return { relay, responderPublicKey: selfPubHex }
   }
