@@ -72,6 +72,7 @@ async function propose(signal = new AbortController().signal) {
   const session = await upgraded.promise
 
   session.addEventListener("event", event => onevent(event.data), { signal: session.closed })
+  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closed })
 
   const settled = Promise.withResolvers<WcSessionSettleParams>()
   stack.defer(() => settled.reject())
@@ -146,6 +147,7 @@ async function respond(url: string, signal = new AbortController().signal) {
   const session = await upgraded.promise
 
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closed })
+  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closed })
 
   await session.open()
 
@@ -194,6 +196,7 @@ async function resume(saved: WcSave) {
 
   session.addEventListener("event", event => onevent(event.data), { signal: session.closed })
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closed })
+  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closed })
 
   await session.open()
 
@@ -241,6 +244,8 @@ console.log("Resuming session...")
 const session2 = await resume(await save(session))
 
 console.log("Session resumed")
+
+session2.addEventListener("close", () => console.log("Session closed"), { signal: session2.closed })
 
 // await new Promise(resolve => setTimeout(resolve, 5000))
 

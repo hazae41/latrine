@@ -197,7 +197,7 @@ export class WcSession extends EventTarget {
   }
 
   async close(reason?: string) {
-    return await this.channel.close(reason)
+    await this.channel.close(reason)
   }
 
   async settle(params: WcSessionSettleParams, signal = new AbortController().signal) {
