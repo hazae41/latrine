@@ -265,7 +265,7 @@ export class WcChannel extends EventTarget {
     await this.client.publish(payload)
   }
 
-  async #respond(request: RpcRequestInit<unknown>) {
+  async #respond(request: RpcRequestPreinit<unknown>) {
     const subevent = new DataRespondableEvent("request", { data: request })
 
     this.dispatchEvent(subevent)

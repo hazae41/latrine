@@ -119,7 +119,7 @@ export class IrnClient extends EventTarget {
     this.socket.send(SafeJson.stringify(response))
   }
 
-  async #respond(request: RpcRequestInit<unknown>) {
+  async #respond(request: RpcRequestPreinit<unknown>) {
     const subevent = new DataRespondableEvent("request", { data: request })
 
     this.dispatchEvent(subevent)
