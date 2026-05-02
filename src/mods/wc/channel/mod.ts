@@ -279,9 +279,7 @@ export class WcChannel extends EventTarget {
   }
 
   async #onResponse(response: RpcResponseInit<unknown>) {
-    const subevent = new DataEvent("response", { data: response })
-
-    this.dispatchEvent(subevent)
+    this.dispatchEvent(new DataEvent("response", { data: response }))
   }
 
   #decryptOrThrow(message: string): RpcMessageInit {
