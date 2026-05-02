@@ -88,8 +88,8 @@ export class WcPairing extends EventTarget {
   ) {
     super()
 
-    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
-    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closing })
+    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closing })
   }
 
   static async generate(client: IrnClient) {
@@ -119,8 +119,8 @@ export class WcPairing extends EventTarget {
     super.addEventListener(type, callback, options)
   }
 
-  get closed() {
-    return this.channel.closed
+  get closing() {
+    return this.channel.closing
   }
 
   #onChannelClose(event: CloseEvent) {

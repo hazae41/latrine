@@ -160,7 +160,7 @@ export interface WcChannelEventMap {
 
 export class WcChannel extends EventTarget {
 
-  readonly #closed = new AbortController()
+  readonly #closing = new AbortController()
 
   #cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher
 
@@ -179,8 +179,8 @@ export class WcChannel extends EventTarget {
 
     this.#cipher = ChaCha20Poly1305Cipher.importOrThrow(Memory.fromOrThrow(key))
 
-    client.addEventListener("request", this.#onClientRequest.bind(this), { signal: this.closed })
-    client.addEventListener("close", this.#onClientClose.bind(this), { signal: this.closed })
+    client.addEventListener("request", this.#onClientRequest.bind(this), { signal: this.closing })
+    client.addEventListener("close", this.#onClientClose.bind(this), { signal: this.closing })
   }
 
   [Symbol.dispose]() {
@@ -195,12 +195,12 @@ export class WcChannel extends EventTarget {
     super.addEventListener(type, callback, options)
   }
 
-  get closed() {
-    return this.#closed.signal
+  get closing() {
+    return this.#closing.signal
   }
 
   #onClientClose(event: CloseEvent) {
-    if (this.closed.aborted)
+    if (this.closing.aborted)
       return
 
     const { reason } = event
@@ -209,7 +209,7 @@ export class WcChannel extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    this.#closed.abort(reason)
+    this.#closing.abort(reason)
   }
 
   #onClientRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -316,7 +316,7 @@ export class WcChannel extends EventTarget {
   }
 
   async subscribe() {
-    if (this.closed.aborted)
+    if (this.closing.aborted)
       return
     if (this.#id != null)
       return
@@ -324,7 +324,7 @@ export class WcChannel extends EventTarget {
   }
 
   async unsubscribe() {
-    if (this.closed.aborted)
+    if (this.closing.aborted)
       return
     if (this.#id == null)
       return
@@ -398,7 +398,7 @@ export class WcChannel extends EventTarget {
   }
 
   async close(reason?: string) {
-    if (this.closed.aborted)
+    if (this.closing.aborted)
       return
 
     await this.unsubscribe()
@@ -407,7 +407,7 @@ export class WcChannel extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    this.#closed.abort(reason)
+    this.#closing.abort(reason)
   }
 
 }

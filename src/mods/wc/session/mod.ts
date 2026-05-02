@@ -81,8 +81,8 @@ export class WcSession extends EventTarget {
 
     this.channel = channel
 
-    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closed })
-    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
+    channel.addEventListener("request", this.#onChannelRequest.bind(this), { signal: this.closing })
+    channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closing })
   }
 
   override addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
@@ -93,8 +93,8 @@ export class WcSession extends EventTarget {
     super.addEventListener(type, callback, options)
   }
 
-  get closed() {
-    return this.channel.closed
+  get closing() {
+    return this.channel.closing
   }
 
   #onChannelClose(event: CloseEvent) {

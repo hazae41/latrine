@@ -76,8 +76,8 @@ async function propose(signal = new AbortController().signal) {
 
   const session = await upgraded.promise
 
-  session.addEventListener("event", event => onevent(event.data), { signal: session.closed })
-  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closed })
+  session.addEventListener("event", event => onevent(event.data), { signal: session.closing })
+  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closing })
 
   const settled = Promise.withResolvers<WcSessionSettleParams>()
   stack.defer(() => settled.reject())
@@ -153,8 +153,8 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   const session = await upgraded.promise
 
-  session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closed })
-  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closed })
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closing })
+  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closing })
 
   await session.open()
 
@@ -202,13 +202,13 @@ async function resume(save: UserData) {
   const channel = new WcChannel(client, tpc, key)
   const session = new WcSession(channel)
 
-  session.addEventListener("event", event => onevent(event.data), { signal: session.closed })
-  session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closed })
-  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closed })
+  session.addEventListener("event", event => onevent(event.data), { signal: session.closing })
+  session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closing })
+  session.addEventListener("close", () => console.log("Session closed"), { signal: session.closing })
 
   await session.open()
 
-  if (session.closed.aborted)
+  if (session.closing.aborted)
     return
 
   return { wcs: session, jwk } satisfies User

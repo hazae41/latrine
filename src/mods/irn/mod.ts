@@ -33,15 +33,15 @@ export interface IrnClientEventMap {
 
 export class IrnClient extends EventTarget {
 
-  readonly #closed = new AbortController()
+  readonly #closing = new AbortController()
 
   constructor(
     readonly socket: WebSocket
   ) {
     super()
 
-    socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal: this.closed })
-    socket.addEventListener("close", this.#onSocketClose.bind(this), { signal: this.closed })
+    socket.addEventListener("message", this.#onSocketMessage.bind(this), { signal: this.closing })
+    socket.addEventListener("close", this.#onSocketClose.bind(this), { signal: this.closing })
   }
 
   static async open(relay: string, jwk: Uint8Array<ArrayBuffer>, projectId: string, signal = new AbortController().signal): Promise<IrnClient> {
@@ -78,8 +78,8 @@ export class IrnClient extends EventTarget {
     super.addEventListener(type, callback, options)
   }
 
-  get closed() {
-    return this.#closed.signal
+  get closing() {
+    return this.#closing.signal
   }
 
   get relay() {
@@ -87,7 +87,7 @@ export class IrnClient extends EventTarget {
   }
 
   #onSocketClose(event: CloseEvent) {
-    if (this.closed.aborted)
+    if (this.closing.aborted)
       return
 
     const { reason } = event
@@ -96,7 +96,7 @@ export class IrnClient extends EventTarget {
 
     this.dispatchEvent(subevent)
 
-    this.#closed.abort(reason)
+    this.#closing.abort(reason)
   }
 
   #onSocketMessage(event: MessageEvent<unknown>) {
