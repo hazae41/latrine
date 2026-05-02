@@ -111,11 +111,11 @@ export class WcPairing extends EventTarget {
     return new WcPairing(channel, keypair, params)
   }
 
-  addEventListener<K extends keyof WcPairingEventMap>(type: K, listener: (e: WcPairingEventMap[K]) => void, options?: AddEventListenerOptions): void
+  override addEventListener<K extends keyof WcPairingEventMap>(type: K, listener: (e: WcPairingEventMap[K]) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
     super.addEventListener(type, callback, options)
   }
 

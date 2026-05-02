@@ -85,11 +85,11 @@ export class WcSession extends EventTarget {
     channel.addEventListener("close", this.#onChannelClose.bind(this), { signal: this.closed })
   }
 
-  addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
+  override addEventListener<K extends keyof WcSessionEventMap>(type: K, listener: (e: WcSessionEventMap[K]) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
     super.addEventListener(type, callback, options)
   }
 

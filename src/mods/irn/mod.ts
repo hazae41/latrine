@@ -70,11 +70,11 @@ export class IrnClient extends EventTarget {
     this.close()
   }
 
-  addEventListener<K extends keyof IrnClientEventMap>(type: K, listener: (e: IrnClientEventMap[K]) => void, options?: AddEventListenerOptions): void
+  override addEventListener<K extends keyof IrnClientEventMap>(type: K, listener: (e: IrnClientEventMap[K]) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
     super.addEventListener(type, callback, options)
   }
 

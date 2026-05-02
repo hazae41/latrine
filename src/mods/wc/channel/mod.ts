@@ -187,11 +187,11 @@ export class WcChannel extends EventTarget {
     this.close()
   }
 
-  addEventListener<K extends keyof WcChannelEventMap>(type: K, listener: (e: WcChannelEventMap[K]) => void, options?: AddEventListenerOptions): void
+  override addEventListener<K extends keyof WcChannelEventMap>(type: K, listener: (e: WcChannelEventMap[K]) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void
 
-  addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
+  override addEventListener(type: string, callback: (e: Event) => void, options?: AddEventListenerOptions): void {
     super.addEventListener(type, callback, options)
   }
 
