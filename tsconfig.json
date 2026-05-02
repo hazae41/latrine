@@ -1,11 +1,16 @@
 {
   "compilerOptions": {
-    "target": "es2024", 
-    "lib": ["ESNext", "DOM"],
+    "target": "es2024",
+    "lib": [
+      "ESNext",
+      "DOM"
+    ],
     "rootDir": "./src",
     "paths": {
-      "@/*": ["./src/*"]
-    } ,
+      "@/*": [
+        "./src/*"
+      ]
+    },
     "module": "nodenext",
     "moduleResolution": "nodenext",
     "outDir": "./out",
