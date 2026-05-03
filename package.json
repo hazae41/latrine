@@ -1,7 +1,7 @@
 {
   "type": "module",
   "name": "@hazae41/latrine",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Secure and private WalletConnect client",
   "homepage": "https://github.com/hazae41/latrine",
   "repository": "github:hazae41/latrine",
