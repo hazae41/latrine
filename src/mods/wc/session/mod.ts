@@ -9,9 +9,10 @@ export interface WcEvent {
   readonly data?: unknown
 }
 
-export interface WcEventAndChain {
-  readonly event: WcEvent
-  readonly chainId: number
+export interface WcRequest<T = unknown> {
+  readonly method: string
+  readonly params: T
+  readonly expiry?: number
 }
 
 export interface WcSessionProposeParams {
@@ -42,17 +43,23 @@ export interface WcSessionSettleParams {
   readonly expiry: number
 }
 
+export interface WcSessionExtendParams {
+  readonly expiry: number
+}
+
+export interface WcSessionEventParams {
+  readonly event: WcEvent
+  readonly chainId: number
+}
+
+export interface WcSessionUpdateParams {
+  readonly namespaces: unknown
+}
+
 export interface WcSessionRequestParams<T = unknown> {
   readonly chainId: `${string}:${string}`
   readonly request: WcRequest<T>
 }
-
-export interface WcRequest<T = unknown> {
-  readonly method: string
-  readonly params: T
-  readonly expiry?: number
-}
-
 export interface WcSessionDeleteParams {
   readonly code: number
   readonly message: string
@@ -63,9 +70,13 @@ export interface WcSessionEventMap {
 
   close: CloseEvent
 
-  event: DataEvent<WcEventAndChain>
-
   settle: DataEvent<WcSessionSettleParams>
+
+  extend: DataEvent<WcSessionExtendParams>
+
+  event: DataEvent<WcSessionEventParams>
+
+  update: DataEvent<WcSessionUpdateParams>
 
   request: DataRespondableEvent<WcSessionRequestParams<unknown>, unknown>
 
@@ -108,18 +119,30 @@ export class WcSession extends EventTarget {
   #onChannelRequest(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
     const request = event.data
 
-    if (request.method === "wc_sessionSettle")
-      return this.#onSessionSettle(event)
     if (request.method === "wc_sessionPing")
       return this.#onSessionPing(event)
+    if (request.method === "wc_sessionSettle")
+      return this.#onSessionSettle(event)
+    if (request.method === "wc_sessionExtend")
+      return this.#onSessionExtend(event)
     if (request.method === "wc_sessionEvent")
       return this.#onSessionEvent(event)
+    if (request.method === "wc_sessionUpdate")
+      return this.#onSessionUpdate(event)
     if (request.method === "wc_sessionRequest")
       return this.#onSessionRequest(event)
     if (request.method === "wc_sessionDelete")
       return this.#onSessionDelete(event)
 
     return
+  }
+
+  #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const subevent = new Event("ping")
+
+    this.dispatchEvent(subevent)
+
+    event.respondWith(true)
   }
 
   #onSessionSettle(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
@@ -132,8 +155,10 @@ export class WcSession extends EventTarget {
     event.respondWith(true)
   }
 
-  #onSessionPing(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
-    const subevent = new Event("ping")
+  #onSessionExtend(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<WcSessionExtendParams>
+
+    const subevent = new DataEvent("extend", { data: request.params })
 
     this.dispatchEvent(subevent)
 
@@ -141,9 +166,19 @@ export class WcSession extends EventTarget {
   }
 
   #onSessionEvent(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
-    const request = event.data as RpcRequestPreinit<WcEventAndChain>
+    const request = event.data as RpcRequestPreinit<WcSessionEventParams>
 
     const subevent = new DataEvent("event", { data: request.params })
+
+    this.dispatchEvent(subevent)
+
+    event.respondWith(true)
+  }
+
+  #onSessionUpdate(event: DataRespondableEvent<RpcRequestPreinit<unknown>, unknown>) {
+    const request = event.data as RpcRequestPreinit<WcSessionUpdateParams>
+
+    const subevent = new DataEvent("update", { data: request.params })
 
     this.dispatchEvent(subevent)
 
@@ -184,20 +219,28 @@ export class WcSession extends EventTarget {
     await this.channel.close(reason)
   }
 
-  async settle(params: WcSessionSettleParams, signal = new AbortController().signal) {
-    await this.channel.request<true>({ method: "wc_sessionSettle", params }, signal).then(r => r.getOrThrow())
-  }
-
   async ping(signal = new AbortController().signal) {
     await this.channel.request<true>({ method: "wc_sessionPing", params: {} }, signal).then(r => r.getOrThrow())
   }
 
-  async event(event: { name: string, data?: unknown }, chainId: number, signal = new AbortController().signal) {
-    await this.channel.request<true>({ method: "wc_sessionEvent", params: { event, chainId } }, signal).then(r => r.getOrThrow())
+  async settle(params: WcSessionSettleParams, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_sessionSettle", params }, signal).then(r => r.getOrThrow())
   }
 
-  async extend(expiry: number, signal = new AbortController().signal) {
-    await this.channel.request<true>({ method: "wc_sessionExtend", params: { expiry } }, signal).then(r => r.getOrThrow())
+  async extend(params: WcSessionExtendParams, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_sessionExtend", params }, signal).then(r => r.getOrThrow())
+  }
+
+  async event(params: WcSessionEventParams, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_sessionEvent", params }, signal).then(r => r.getOrThrow())
+  }
+
+  async update(params: WcSessionUpdateParams, signal = new AbortController().signal) {
+    await this.channel.request<true>({ method: "wc_sessionUpdate", params }, signal).then(r => r.getOrThrow())
+  }
+
+  async request<T>(params: WcSessionRequestParams<unknown>, signal = new AbortController().signal) {
+    return await this.channel.request<T>({ method: "wc_sessionRequest", params }, signal).then(r => r.getOrThrow())
   }
 
   async delete(params: RpcError = new WcUserDisconnectedError()): Promise<void> {

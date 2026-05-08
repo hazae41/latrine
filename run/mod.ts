@@ -1,20 +1,18 @@
-// deno-lint-ignore-file no-process-global
+// deno-lint-ignore-file no-process-global no-explicit-any
 
 import { IrnClient } from "@/mods/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcInvalidMethodError, WcUserRejectedError } from "@/mods/wc/errors/mod.ts";
 import { WalletConnect, WcPairingParams, WcSessionRequestParams } from "@/mods/wc/mod.ts";
 import { WcPairing } from "@/mods/wc/pairing/mod.ts";
-import { WcEventAndChain, WcSession, WcSessionProposeParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/session/mod.ts";
+import { WcSession, WcSessionEventParams, WcSessionProposeParams, WcSessionProposeResult, WcSessionSettleParams } from "@/mods/wc/session/mod.ts";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { chaCha20Poly1305Wasm } from "@hazae41/chacha20poly1305-wasm";
+import { base58 } from "@scure/base";
 
 await chaCha20Poly1305Wasm.load()
 
 chaCha20Poly1305.set(chaCha20Poly1305.fromWasm(chaCha20Poly1305Wasm))
-
-const address = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045"
-const chains = [1]
 
 const metadata = {
   name: "Latrine",
@@ -25,24 +23,30 @@ const metadata = {
 
 const namespaces = {
   eip155: {
-    chains: chains.map(chainId => `eip155:${chainId}`),
-    methods: ["eth_sendTransaction", "personal_sign", "eth_signTypedData", "eth_signTypedData_v4"],
-    events: ["chainChanged", "accountsChanged"],
-    accounts: chains.map(chainId => `eip155:${chainId}:${address}`)
+    chains: [1].map(chainId => `eip155:${chainId}`),
+    accounts: [1].map(chainId => `eip155:${chainId}:0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045`),
+    methods: ["personal_sign"],
+    events: [],
   }
 }
 
-const optionalNamespaces = {
-  eip155: {
-    chains: ["eip155:1"],
-    methods: ["eth_sendTransaction", "personal_sign"],
-    events: ["chainChanged", "accountsChanged"]
+const requiredNamespaces = {
+  // eip155: {
+  //   chains: ["eip155:1"],
+  //   methods: ["personal_sign"],
+  //   events: []
+  // },
+  solana: {
+    chains: ["solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp"],
+    methods: ["solana_signMessage"],
+    events: []
   }
 }
 
 interface User {
   readonly wcs: WcSession,
-  readonly jwk: Uint8Array
+  readonly jwk: Uint8Array,
+  readonly stl: WcSessionSettleParams
 }
 
 async function propose(signal = new AbortController().signal) {
@@ -72,7 +76,7 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
 
-  await pairing.propose({ self: metadata, optionalNamespaces })
+  await pairing.propose({ self: metadata, requiredNamespaces })
 
   const session = await upgraded.promise
 
@@ -94,11 +98,11 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())
 
-  await settled.promise
+  const stl = await settled.promise
 
   success = true
 
-  return { wcs: session, jwk } satisfies User
+  return { wcs: session, jwk, stl } satisfies User
 }
 
 async function respond(url: string, signal = new AbortController().signal) {
@@ -171,31 +175,36 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   const expiry = Math.floor(Date.now() / 1000) + (365 * 24 * 60 * 60)
 
-  await session.settle({ relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: pairing.channel.topic, controller, expiry })
+  const stl = { relay, namespaces, requiredNamespaces, optionalNamespaces, pairingTopic: pairing.channel.topic, controller, expiry }
+
+  await session.settle(stl)
 
   success = true
 
-  return { wcs: session, jwk } satisfies User
+  return { wcs: session, jwk, stl } satisfies User
 }
 
 interface UserData {
   readonly tpc: string
   readonly key: string
   readonly jwk: string
+  readonly stl: WcSessionSettleParams
 }
 
 async function save(user: User) {
   const tpc = user.wcs.channel.topic
   const key = user.wcs.channel.key.toBase64()
   const jwk = user.jwk.toBase64()
+  const stl = user.stl
 
-  return { tpc, key, jwk } satisfies UserData
+  return { tpc, key, jwk, stl } satisfies UserData
 }
 
 async function resume(save: UserData) {
   const tpc = save.tpc
   const key = Uint8Array.fromBase64(save.key)
   const jwk = Uint8Array.fromBase64(save.jwk)
+  const stl = save.stl
 
   const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
 
@@ -211,7 +220,7 @@ async function resume(save: UserData) {
   if (session.closing.aborted)
     return
 
-  return { wcs: session, jwk } satisfies User
+  return { wcs: session, jwk, stl } satisfies User
 }
 
 async function onrequest(data: WcSessionRequestParams<unknown>) {
@@ -225,7 +234,7 @@ async function onrequest(data: WcSessionRequestParams<unknown>) {
   throw new WcInvalidMethodError()
 }
 
-async function onevent(data: WcEventAndChain) {
+async function onevent(data: WcSessionEventParams) {
   const { event, chainId } = data
 
   console.log(chainId, event)
@@ -237,27 +246,43 @@ const user = process.argv[2] ? await respond(process.argv[2]) : await propose()
 
 console.log("Session paired")
 
-await new Promise(resolve => setTimeout(resolve, 1000))
+const msgraw = crypto.getRandomValues(new Uint8Array(32))
 
-user.wcs.channel.client.socket.close()
+const pubkey = (user.stl.namespaces as any).solana.accounts[0].split(":")[2]
+const message = base58.encode(msgraw)
 
-console.log("Session disconnected")
+const request = { method: "solana_signMessage", params: { pubkey, message } }
 
-await new Promise(resolve => setTimeout(resolve, 10000))
+const response = await user.wcs.request<{ signature: string }>({ chainId: "solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp", request })
 
-console.log("Resuming session...")
+const sigraw = new Uint8Array(base58.decode(response.signature))
 
-const user2 = await resume(await save(user))
+const pubraw = new Uint8Array(base58.decode(pubkey))
+const pubref = await crypto.subtle.importKey("raw", pubraw, { name: "Ed25519" }, false, ["verify"])
 
-if (user2 != null) {
-  console.log("Session resumed")
+console.log(await crypto.subtle.verify({ name: "Ed25519" }, pubref, sigraw, msgraw))
 
-  await new Promise(resolve => setTimeout(resolve, 5000))
+// await new Promise(resolve => setTimeout(resolve, 1000))
 
-  console.log("Closing session...")
+// user.wcs.channel.client.socket.close()
 
-  await user2.wcs.delete()
-  await user2.wcs.close()
-}
+// console.log("Session disconnected")
 
-console.log("Finished")
+// await new Promise(resolve => setTimeout(resolve, 10000))
+
+// console.log("Resuming session...")
+
+// const user2 = await resume(await save(user))
+
+// if (user2 != null) {
+//   console.log("Session resumed")
+
+//   await new Promise(resolve => setTimeout(resolve, 5000))
+
+//   console.log("Closing session...")
+
+//   await user2.wcs.delete()
+//   await user2.wcs.close()
+// }
+
+// console.log("Finished")
