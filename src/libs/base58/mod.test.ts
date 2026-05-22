@@ -3,7 +3,7 @@ import { assert, test } from "@hazae41/phobos";
 
 test("base58 random", async () => {
   for (let i = 0; i < 1024; i++) {
-    const length = crypto.getRandomValues(new Uint8Array(1))[0] + 1
+    const length = crypto.getRandomValues(new Uint8Array(1))[0]
 
     const sourced = crypto.getRandomValues(new Uint8Array(length))
 
