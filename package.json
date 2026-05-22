@@ -59,7 +59,6 @@
     "@hazae41/cursor": "^2.1.4",
     "@hazae41/jsonrpc": "^1.1.11",
     "@hazae41/plume": "^4.0.1",
-    "@hazae41/result-and-option": "^2.0.10",
-    "@scure/base": "^2.2.0"
+    "@hazae41/result-and-option": "^2.0.10"
   }
 }

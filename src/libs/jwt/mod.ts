@@ -1,7 +1,7 @@
+import { base58 } from "@/libs/base58/mod.ts";
 import { Bytes } from "@/libs/bytes/mod.ts";
 import { Ed25519 } from "@/libs/ed25519/mod.ts";
 import { SafeJson } from "@/libs/json/mod.ts";
-import { base58 } from "@scure/base";
 
 export namespace Jwt {
 

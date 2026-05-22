@@ -1,17 +1,38 @@
 import { base58 } from "@/libs/base58/mod.ts";
 import { assert, test } from "@hazae41/phobos";
 
-test("base58 #0", async () => {
-  for (let i = 0; i < 16; i++) {
-    const length = crypto.getRandomValues(new Uint8Array(1))[0]
+test("base58 random", async () => {
+  for (let i = 0; i < 1024; i++) {
+    const length = crypto.getRandomValues(new Uint8Array(1))[0] + 1
 
     const sourced = crypto.getRandomValues(new Uint8Array(length))
 
     const encoded = base58.encode(sourced)
     const decoded = base58.decode(encoded)
 
-    assert(sourced.toHex() === decoded.toHex())
+    try {
+      assert(sourced.toHex() === decoded.toHex())
+    } catch (error) {
+      console.debug(sourced.toHex())
+
+      console.debug(encoded)
+
+      console.debug(decoded.toHex())
+
+      throw error
+    }
   }
+})
+
+test("base58 #0", async () => {
+  const sourced = Uint8Array.fromHex("00")
+
+  const encoded = base58.encode(sourced)
+  const decoded = base58.decode(encoded)
+
+  assert(encoded === "1")
+
+  assert(sourced.toHex() === decoded.toHex())
 })
 
 test("base58 #1", async () => {
