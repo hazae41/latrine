@@ -8,4 +8,5 @@ export namespace Bytes {
 
     return result
   }
+
 }

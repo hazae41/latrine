@@ -23,8 +23,8 @@
     "@hazae41/chacha20poly1305-wasm": "^2.0.0",
     "@hazae41/phobos": "^2.0.16",
     "@hazae41/tscousin": "^1.0.28",
-    "@types/node": "^25.6.0",
-    "deno": "^2.7.13",
+    "@types/node": "^25.9.1",
+    "deno": "^2.7.14",
     "typescript": "^6.0.3"
   },
   "keywords": [
@@ -55,6 +55,7 @@
     "@hazae41/chacha20poly1305": "^2.0.2"
   },
   "dependencies": {
+    "@hazae41/base58": "^2.0.0",
     "@hazae41/binary": "^2.0.2",
     "@hazae41/cursor": "^2.1.4",
     "@hazae41/jsonrpc": "^1.1.11",
