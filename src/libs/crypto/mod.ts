@@ -8,16 +8,8 @@ export class Plaintext<T extends Writable> {
     readonly fragment: T
   ) { }
 
-  encryptOrThrow(key: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher, iv: Uint8Array<ArrayBuffer>): Ciphertext {
-    const { Memory } = chaCha20Poly1305.get().getOrThrow()
-
-    using plain = Memory.fromOrThrow(Writable.writeToBytesOrThrow(this.fragment))
-
-    using nonce = Memory.fromOrThrow(iv)
-
-    using cipher = key.encryptOrThrow(plain, nonce)
-
-    return new Ciphertext(iv, cipher.bytes.slice())
+  encryptOrThrow(key: chaCha20Poly1305.Cipher, iv: Uint8Array<ArrayBuffer>): Ciphertext {
+    return new Ciphertext(iv, key.encrypt(Writable.writeToBytesOrThrow(this.fragment), iv))
   }
 
 }
@@ -29,16 +21,8 @@ export class Ciphertext {
     readonly inner: Uint8Array<ArrayBuffer>,
   ) { }
 
-  decryptOrThrow(key: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher): Plaintext<Unknown> {
-    const { Memory } = chaCha20Poly1305.get().getOrThrow()
-
-    using inner = Memory.fromOrThrow(this.inner)
-
-    using iv = Memory.fromOrThrow(this.iv)
-
-    using plain = key.decryptOrThrow(inner, iv)
-
-    return new Plaintext(new Unknown(plain.bytes.slice()))
+  decryptOrThrow(key: chaCha20Poly1305.Cipher): Plaintext<Unknown> {
+    return new Plaintext(new Unknown(key.decrypt(this.inner, this.iv)))
   }
 
   sizeOrThrow() {

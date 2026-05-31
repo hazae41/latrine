@@ -162,7 +162,7 @@ export class WcChannel extends EventTarget {
 
   readonly #closing = new AbortController()
 
-  #cipher: chaCha20Poly1305.Abstract.ChaCha20Poly1305Cipher
+  #cipher: chaCha20Poly1305.Cipher
 
   #acks = new Set<number>()
 
@@ -175,9 +175,7 @@ export class WcChannel extends EventTarget {
   ) {
     super()
 
-    const { Memory, ChaCha20Poly1305Cipher } = chaCha20Poly1305.get().getOrThrow()
-
-    this.#cipher = ChaCha20Poly1305Cipher.importOrThrow(Memory.fromOrThrow(key))
+    this.#cipher = chaCha20Poly1305.Cipher.import(key)
 
     client.addEventListener("request", this.#onClientRequest.bind(this), { signal: this.closing })
     client.addEventListener("close", this.#onClientClose.bind(this), { signal: this.closing })
