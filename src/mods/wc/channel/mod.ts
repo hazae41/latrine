@@ -1,3 +1,5 @@
+// deno-lint-ignore-file require-await
+
 import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "@/libs/crypto/mod.ts";
 import { SafeJson } from "@/libs/json/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
@@ -231,7 +233,7 @@ export class WcChannel extends EventTarget {
   }
 
   async #onIrnMessage(message: string) {
-    const data = this.#decryptOrThrow(message)
+    const data = this.#decrypt(message)
 
     if ("method" in data)
       await this.#onRequest(data)
@@ -256,7 +258,7 @@ export class WcChannel extends EventTarget {
     const { topic } = this
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[request.method].res
 
-    const message = this.#encryptOrThrow(response)
+    const message = this.#encrypt(response)
 
     const payload = { topic, message, prompt, tag, ttl }
 
@@ -280,12 +282,12 @@ export class WcChannel extends EventTarget {
     this.dispatchEvent(new DataEvent("response", { data: response }))
   }
 
-  #decryptOrThrow(message: string): RpcMessageInit {
+  #decrypt(message: string): RpcMessageInit {
     const written = Uint8Array.fromBase64(message)
-    const wrapper = Readable.readFromBytesOrThrow(Envelope, written)
+    const wrapper = Readable.readFromBytes(Envelope, written)
 
-    const encrypted = wrapper.fragment.readIntoOrThrow(Ciphertext)
-    const decrypted = encrypted.decryptOrThrow(this.#cipher)
+    const encrypted = wrapper.fragment.into(Ciphertext)
+    const decrypted = encrypted.decrypt(this.#cipher)
 
     const json = new TextDecoder().decode(decrypted.fragment.bytes)
     const data = SafeJson.parse(json) as RpcMessageInit
@@ -295,7 +297,7 @@ export class WcChannel extends EventTarget {
     return data
   }
 
-  #encryptOrThrow(data: unknown): string {
+  #encrypt(data: unknown): string {
     console.log("<-", data)
 
     const json = SafeJson.stringify(data)
@@ -303,10 +305,10 @@ export class WcChannel extends EventTarget {
     const nonce = crypto.getRandomValues(new Uint8Array(12))
 
     const decrypted = new Plaintext(new Unknown(new TextEncoder().encode(json)))
-    const encrypted = decrypted.encryptOrThrow(this.#cipher, nonce)
+    const encrypted = decrypted.encrypt(this.#cipher, nonce)
 
     const wrapper = new EnvelopeTypeZero(encrypted)
-    const written = Writable.writeToBytesOrThrow(wrapper)
+    const written = Writable.writeToBytes(wrapper)
 
     const message = written.toBase64({ alphabet: "base64", omitPadding: false })
 
@@ -333,7 +335,7 @@ export class WcChannel extends EventTarget {
     const request = SafeRpc.prepare(init)
 
     const { topic } = this
-    const message = this.#encryptOrThrow(request)
+    const message = this.#encrypt(request)
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
 
     const payload = { topic, message, prompt, tag, ttl }
@@ -345,7 +347,7 @@ export class WcChannel extends EventTarget {
     const request = SafeRpc.prepare(init)
 
     const { topic } = this
-    const message = this.#encryptOrThrow(request)
+    const message = this.#encrypt(request)
     const { prompt, tag, ttl } = ENGINE_RPC_OPTS[init.method].req
 
     const { id } = request

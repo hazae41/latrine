@@ -50,7 +50,7 @@ export class IrnClient extends EventTarget {
     const cleaner = new AbortController()
     stack.defer(() => cleaner.abort())
 
-    const jwt = await Jwt.signOrThrow(jwk, relay)
+    const jwt = await Jwt.sign(jwk, relay)
 
     const socket = new WebSocket(`${relay}/?auth=${jwt}&projectId=${projectId}`)
 
@@ -133,14 +133,14 @@ export class IrnClient extends EventTarget {
   }
 
   async subscribe(topic: string): Promise<string> {
-    return await SafeRpc.requestOrThrow<string>(this.socket, {
+    return await SafeRpc.request<string>(this.socket, {
       method: "irn_subscribe",
       params: { topic }
     }).then(r => r.getOrThrow())
   }
 
   async unsubscribe(id: string, topic: string): Promise<void> {
-    await SafeRpc.requestOrThrow<true>(this.socket, {
+    await SafeRpc.request<true>(this.socket, {
       method: "irn_unsubscribe",
       params: { id, topic }
     }).then(r => r.getOrThrow())
@@ -148,7 +148,7 @@ export class IrnClient extends EventTarget {
 
   async* fetch(topic: string): AsyncGenerator<IrnMessage> {
     while (true) {
-      const data = await SafeRpc.requestOrThrow<{ messages: IrnMessage[], hasMore: boolean }>(this.socket, {
+      const data = await SafeRpc.request<{ messages: IrnMessage[], hasMore: boolean }>(this.socket, {
         method: "irn_fetchMessages",
         params: { topic }
       }).then(r => r.getOrThrow())
@@ -164,7 +164,7 @@ export class IrnClient extends EventTarget {
   }
 
   async publish(payload: IrnPublishPayload): Promise<void> {
-    await SafeRpc.requestOrThrow<true>(this.socket, {
+    await SafeRpc.request<true>(this.socket, {
       method: "irn_publish",
       params: payload
     }).then(r => r.getOrThrow())

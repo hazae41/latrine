@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-explicit-any no-namespace
+
 export namespace BigJson {
 
   /**

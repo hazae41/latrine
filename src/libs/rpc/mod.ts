@@ -1,3 +1,5 @@
+// deno-lint-ignore-file require-await no-namespace
+
 import { SafeJson } from "@/libs/json/mod.ts";
 import { RpcParamfulRequestPreinit, RpcRequest, RpcRequestPreinit, RpcResponse } from "@hazae41/jsonrpc";
 
@@ -11,7 +13,7 @@ export namespace SafeRpc {
     return new RpcRequest(id, method, params)
   }
 
-  export async function requestOrThrow<T>(socket: WebSocket, init: RpcRequestPreinit<unknown>, signal = new AbortController().signal) {
+  export async function request<T>(socket: WebSocket, init: RpcRequestPreinit<unknown>, signal = new AbortController().signal) {
     using stack = new DisposableStack()
 
     const cleaner = new AbortController()

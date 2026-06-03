@@ -1,8 +1,9 @@
+// deno-lint-ignore-file no-namespace
+
 export * from "./channel/mod.ts";
 export * from "./errors/mod.ts";
 export * from "./pairing/mod.ts";
 export * from "./session/mod.ts";
-
 
 export interface WcRelay {
   readonly protocol: string

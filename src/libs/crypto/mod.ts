@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-namespace
+
 import { Unknown, Writable } from "@hazae41/binary";
 import { chaCha20Poly1305 } from "@hazae41/chacha20poly1305";
 import { Cursor } from "@hazae41/cursor";
@@ -8,8 +10,8 @@ export class Plaintext<T extends Writable> {
     readonly fragment: T
   ) { }
 
-  encryptOrThrow(key: chaCha20Poly1305.Cipher, iv: Uint8Array<ArrayBuffer>): Ciphertext {
-    return new Ciphertext(iv, key.encrypt(Writable.writeToBytesOrThrow(this.fragment), iv))
+  encrypt(key: chaCha20Poly1305.Cipher, iv: Uint8Array<ArrayBuffer>): Ciphertext {
+    return new Ciphertext(iv, key.encrypt(Writable.writeToBytes(this.fragment), iv))
   }
 
 }
@@ -21,22 +23,22 @@ export class Ciphertext {
     readonly inner: Uint8Array<ArrayBuffer>,
   ) { }
 
-  decryptOrThrow(key: chaCha20Poly1305.Cipher): Plaintext<Unknown> {
+  decrypt(key: chaCha20Poly1305.Cipher): Plaintext<Unknown> {
     return new Plaintext(new Unknown(key.decrypt(this.inner, this.iv)))
   }
 
-  sizeOrThrow() {
+  size() {
     return this.iv.length + this.inner.length
   }
 
-  writeOrThrow(cursor: Cursor) {
-    cursor.writeOrThrow(this.iv)
-    cursor.writeOrThrow(this.inner)
+  write(cursor: Cursor) {
+    cursor.write(this.iv)
+    cursor.write(this.inner)
   }
 
-  static readOrThrow(cursor: Cursor) {
-    const iv = new Uint8Array(cursor.readOrThrow(12))
-    const inner = new Uint8Array(cursor.readOrThrow(cursor.remaining))
+  static read(cursor: Cursor) {
+    const iv = new Uint8Array(cursor.read(12))
+    const inner = new Uint8Array(cursor.read(cursor.remaining))
 
     return new Ciphertext(iv, inner)
   }
@@ -61,13 +63,13 @@ export namespace Envelope {
 
   }
 
-  export function readOrThrow(cursor: Cursor): Envelope<Unknown> {
-    const type = cursor.getUint8OrThrow()
+  export function read(cursor: Cursor): Envelope<Unknown> {
+    const type = cursor.getUint8()
 
     if (type === 0)
-      return EnvelopeTypeZero.readOrThrow(cursor)
+      return EnvelopeTypeZero.read(cursor)
     if (type === 1)
-      return EnvelopeTypeOne.readOrThrow(cursor)
+      return EnvelopeTypeOne.read(cursor)
 
     throw new UnknownTypeError(type)
   }
@@ -84,22 +86,22 @@ export class EnvelopeTypeZero<T extends Writable> {
     readonly fragment: T
   ) { }
 
-  sizeOrThrow() {
-    return 1 + this.fragment.sizeOrThrow()
+  size() {
+    return 1 + this.fragment.size()
   }
 
-  writeOrThrow(cursor: Cursor) {
-    cursor.writeUint8OrThrow(this.type)
-    this.fragment.writeOrThrow(cursor)
+  write(cursor: Cursor) {
+    cursor.writeUint8(this.type)
+    this.fragment.write(cursor)
   }
 
-  static readOrThrow(cursor: Cursor): EnvelopeTypeZero<Unknown> {
-    const type = cursor.readUint8OrThrow()
+  static read(cursor: Cursor): EnvelopeTypeZero<Unknown> {
+    const type = cursor.readUint8()
 
     if (type !== EnvelopeTypeZero.type)
       throw new Error(`Invalid type-0 type ${type}`)
 
-    const bytes = new Uint8Array(cursor.readOrThrow(cursor.remaining))
+    const bytes = new Uint8Array(cursor.read(cursor.remaining))
 
     const fragment = new Unknown(bytes)
 
@@ -119,24 +121,24 @@ export class EnvelopeTypeOne<T extends Writable> {
     readonly fragment: T
   ) { }
 
-  sizeOrThrow() {
-    return 1 + this.sender.length + this.fragment.sizeOrThrow()
+  size() {
+    return 1 + this.sender.length + this.fragment.size()
   }
 
-  writeOrThrow(cursor: Cursor) {
-    cursor.writeUint8OrThrow(this.type)
-    cursor.writeOrThrow(this.sender)
-    this.fragment.writeOrThrow(cursor)
+  write(cursor: Cursor) {
+    cursor.writeUint8(this.type)
+    cursor.write(this.sender)
+    this.fragment.write(cursor)
   }
 
-  static readOrThrow(cursor: Cursor): EnvelopeTypeOne<Unknown> {
-    const type = cursor.readUint8OrThrow()
+  static read(cursor: Cursor): EnvelopeTypeOne<Unknown> {
+    const type = cursor.readUint8()
 
     if (type !== EnvelopeTypeOne.type)
       throw new Error(`Invalid type ${type}`)
 
-    const sender = new Uint8Array(cursor.readOrThrow(32))
-    const bytes = new Uint8Array(cursor.readOrThrow(cursor.remaining))
+    const sender = new Uint8Array(cursor.read(32))
+    const bytes = new Uint8Array(cursor.read(cursor.remaining))
 
     const fragment = new Unknown(bytes)
 

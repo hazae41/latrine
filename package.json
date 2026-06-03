@@ -20,11 +20,10 @@
     }
   },
   "devDependencies": {
-    "@hazae41/chacha20poly1305-wasm": "^2.0.0",
     "@hazae41/phobos": "^2.0.16",
     "@hazae41/tscousin": "^1.0.28",
     "@types/node": "^25.9.1",
-    "deno": "^2.7.14",
+    "deno": "^2.8.1",
     "typescript": "^6.0.3"
   },
   "keywords": [
@@ -53,11 +52,11 @@
   ],
   "dependencies": {
     "@hazae41/base58": "^2.0.0",
-    "@hazae41/binary": "^2.0.2",
-    "@hazae41/cursor": "^2.1.4",
-    "@hazae41/jsonrpc": "^1.1.11",
+    "@hazae41/binary": "^2.1.1",
+    "@hazae41/cursor": "^2.2.0",
+    "@hazae41/jsonrpc": "^1.2.0",
     "@hazae41/plume": "^4.0.1",
-    "@hazae41/result-and-option": "^2.0.10",
+    "@hazae41/result-and-option": "^2.1.1",
     "@hazae41/chacha20poly1305": "^2.0.8"
   }
 }

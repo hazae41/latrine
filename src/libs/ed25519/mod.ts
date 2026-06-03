@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-namespace
+
 export namespace Ed25519 {
 
   export async function importKey(sigraw: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {

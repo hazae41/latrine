@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-namespace
+
 import { IrnClient } from "@/mods/irn/mod.ts";
 import { WcChannel } from "@/mods/wc/channel/mod.ts";
 import { WcUserDisconnectedError } from "@/mods/wc/errors/mod.ts";

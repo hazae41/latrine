@@ -1,3 +1,5 @@
+// deno-lint-ignore-file no-namespace
+
 import { Bytes } from "@/libs/bytes/mod.ts";
 import { Ed25519 } from "@/libs/ed25519/mod.ts";
 import { SafeJson } from "@/libs/json/mod.ts";
@@ -5,7 +7,7 @@ import { base58 } from "@hazae41/base58";
 
 export namespace Jwt {
 
-  export async function signOrThrow(jwk: Uint8Array<ArrayBuffer>, aud: string): Promise<string> {
+  export async function sign(jwk: Uint8Array<ArrayBuffer>, aud: string): Promise<string> {
     const alg = "EdDSA"
     const typ = "JWT"
 
