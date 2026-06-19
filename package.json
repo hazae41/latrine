@@ -22,8 +22,8 @@
   "devDependencies": {
     "@hazae41/phobos": "^2.0.16",
     "@hazae41/tscousin": "^1.0.28",
-    "@types/node": "^25.9.1",
-    "deno": "^2.8.1",
+    "@types/node": "^25.9.3",
+    "deno": "^2.8.3",
     "typescript": "^6.0.3"
   },
   "keywords": [
@@ -57,6 +57,6 @@
     "@hazae41/jsonrpc": "^1.2.0",
     "@hazae41/plume": "^4.0.1",
     "@hazae41/result-and-option": "^2.1.1",
-    "@hazae41/chacha20poly1305": "^2.0.9"
+    "@hazae41/chacha20poly1305": "^2.0.10"
   }
 }
