@@ -1,4 +1,4 @@
-import { SafeJson } from "@/libs/json/mod.ts";
+import { SafeJSON } from "@/libs/json/mod.ts";
 import { Jwt } from "@/libs/jwt/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
 import { RpcInvalidRequestError, RpcMessageInit, RpcRequestInit, RpcRequestPreinit, RpcResponse } from "@hazae41/jsonrpc";
@@ -116,7 +116,7 @@ export class IrnClient extends EventTarget {
 
     const response = RpcResponse.rewrap(request.id, result)
 
-    this.socket.send(SafeJson.stringify(response))
+    this.socket.send(SafeJSON.stringify(response))
   }
 
   async #respond(request: RpcRequestPreinit<unknown>) {

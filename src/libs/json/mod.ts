@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any no-namespace
 
-export namespace BigJson {
+export namespace BigJSON {
 
   /**
    * Bigger than MAX_SAFE_INTEGER
@@ -33,17 +33,17 @@ export namespace BigJson {
 
 }
 
-export namespace SafeJson {
+export namespace SafeJSON {
 
   export function stringify(value: any) {
     if (typeof value === "string")
       return value
-    return BigJson.stringify(value)
+    return BigJSON.stringify(value)
   }
 
   export function parse(text: string) {
     try {
-      return BigJson.parse(text)
+      return BigJSON.parse(text)
     } catch (e: unknown) {
       return text
     }

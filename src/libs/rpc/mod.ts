@@ -1,6 +1,6 @@
 // deno-lint-ignore-file require-await no-namespace
 
-import { SafeJson } from "@/libs/json/mod.ts";
+import { SafeJSON } from "@/libs/json/mod.ts";
 import { RpcParamfulRequestPreinit, RpcRequest, RpcRequestPreinit, RpcResponse } from "@hazae41/jsonrpc";
 
 export namespace SafeRpc {
@@ -29,7 +29,7 @@ export namespace SafeRpc {
       if (typeof event.data !== "string")
         return
 
-      const json = SafeJson.parse(event.data)
+      const json = SafeJSON.parse(event.data)
       const response = RpcResponse.from<T>(json)
 
       if (response.id !== request.id)
@@ -41,7 +41,7 @@ export namespace SafeRpc {
     socket.addEventListener("close", responded.reject, { signal: cleaner.signal })
     signal.addEventListener("abort", responded.reject, { signal: cleaner.signal })
 
-    socket.send(SafeJson.stringify(request))
+    socket.send(SafeJSON.stringify(request))
 
     return await responded.promise
   }

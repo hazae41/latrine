@@ -1,7 +1,7 @@
 // deno-lint-ignore-file require-await
 
 import { Ciphertext, Envelope, EnvelopeTypeZero, Plaintext } from "@/libs/crypto/mod.ts";
-import { SafeJson } from "@/libs/json/mod.ts";
+import { SafeJSON } from "@/libs/json/mod.ts";
 import { SafeRpc } from "@/libs/rpc/mod.ts";
 import { IrnSubscriptionPayload } from "@/mods/irn/mod.ts";
 import { IrnClient } from "@/mods/mod.ts";
@@ -290,7 +290,7 @@ export class WcChannel extends EventTarget {
     const decrypted = encrypted.decrypt(this.#cipher)
 
     const json = new TextDecoder().decode(decrypted.fragment.bytes)
-    const data = SafeJson.parse(json) as RpcMessageInit
+    const data = SafeJSON.parse(json) as RpcMessageInit
 
     console.log("->", data)
 
@@ -300,7 +300,7 @@ export class WcChannel extends EventTarget {
   #encrypt(data: unknown): string {
     console.log("<-", data)
 
-    const json = SafeJson.stringify(data)
+    const json = SafeJSON.stringify(data)
 
     const nonce = crypto.getRandomValues(new Uint8Array(12))
 
