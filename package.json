@@ -54,9 +54,9 @@
     "@hazae41/base58": "^2.0.0",
     "@hazae41/binary": "^2.1.1",
     "@hazae41/cursor": "^2.2.0",
-    "@hazae41/jsonrpc": "^1.2.0",
+    "@hazae41/jsonrpc": "^1.2.1",
     "@hazae41/plume": "^4.0.1",
     "@hazae41/result-and-option": "^2.1.1",
-    "@hazae41/chacha20poly1305": "^2.0.10"
+    "@hazae41/chacha20poly1305": "^2.0.13"
   }
 }

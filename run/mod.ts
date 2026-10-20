@@ -46,12 +46,16 @@ interface User {
 async function propose(signal = new AbortController().signal) {
   await using stack = new AsyncDisposableStack()
 
+  let success = false
+
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
 
   const jwk = crypto.getRandomValues(new Uint8Array(32))
 
   const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+
+  stack.defer(() => success ? undefined : client.close())
 
   const pairing = await WcPairing.generate(client)
 
@@ -70,7 +74,7 @@ async function propose(signal = new AbortController().signal) {
   stack.defer(async () => await pairing.close())
   stack.defer(async () => await pairing.delete())
 
-  await pairing.propose({ self: metadata, requiredNamespaces })
+  await pairing.propose({ self: metadata, requiredNamespaces }, signal)
 
   const session = await upgraded.promise
 
@@ -87,8 +91,6 @@ async function propose(signal = new AbortController().signal) {
 
   await session.open()
 
-  let success = false
-
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())
 
@@ -102,12 +104,16 @@ async function propose(signal = new AbortController().signal) {
 async function respond(url: string, signal = new AbortController().signal) {
   await using stack = new AsyncDisposableStack()
 
+  let success = false
+
   const cleaner = new AbortController()
   stack.defer(() => cleaner.abort())
 
   const jwk = crypto.getRandomValues(new Uint8Array(32))
 
   const client = await IrnClient.open(WalletConnect.RELAY, jwk, "c6c9bacd35afa3eb9e6cccf6d8464395")
+
+  stack.defer(() => success ? undefined : client.close())
 
   const pairing = await WcPairing.from(client, WcPairingParams.parse(url))
 
@@ -155,8 +161,6 @@ async function respond(url: string, signal = new AbortController().signal) {
   session.addEventListener("close", () => console.log("Session closed"), { signal: session.closing })
 
   await session.open()
-
-  let success = false
 
   stack.defer(async () => success ? undefined : await session.close())
   stack.defer(async () => success ? undefined : await session.delete())

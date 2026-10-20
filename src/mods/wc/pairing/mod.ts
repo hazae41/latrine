@@ -192,7 +192,7 @@ export class WcPairing extends EventTarget {
     await this.channel.close(reason)
   }
 
-  async propose(params: WcProposeParams) {
+  async propose(params: WcProposeParams, signal = new AbortController().signal) {
     const { self, requiredNamespaces = {}, optionalNamespaces = {} } = params
 
     const selfPubRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.keypair.publicKey))
@@ -205,7 +205,7 @@ export class WcPairing extends EventTarget {
     const response = await this.channel.request<WcSessionProposeResult>({
       method: "wc_sessionPropose",
       params: { proposer, relays, requiredNamespaces, optionalNamespaces }
-    }).then(r => r.getOrThrow())
+    }, signal).then(r => r.getOrThrow())
 
     const peerPubRaw = Uint8Array.fromHex(response.responderPublicKey)
     const peerPubKey = await crypto.subtle.importKey("raw", peerPubRaw, "X25519", false, [])
