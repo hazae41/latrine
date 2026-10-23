@@ -71,12 +71,15 @@ async function propose(signal = new AbortController().signal) {
 
   await pairing.open()
 
-  stack.defer(async () => await pairing.close())
-  stack.defer(async () => await pairing.delete())
+  stack.defer(async () => success ? undefined : await pairing.close())
+  stack.defer(async () => success ? undefined : await pairing.delete())
 
   await pairing.propose({ self: metadata, requiredNamespaces }, signal)
 
   const session = await upgraded.promise
+
+  await pairing.delete()
+  await pairing.close()
 
   session.addEventListener("event", event => onevent(event.data), { signal: session.closing })
   session.addEventListener("close", () => console.log("Session closed"), { signal: session.closing })
@@ -143,8 +146,8 @@ async function respond(url: string, signal = new AbortController().signal) {
 
   await pairing.open()
 
-  stack.defer(async () => await pairing.close())
-  stack.defer(async () => await pairing.delete())
+  stack.defer(async () => success ? undefined : await pairing.close())
+  stack.defer(async () => success ? undefined : await pairing.delete())
 
   const proposal = await proposed.promise
 
@@ -156,6 +159,9 @@ async function respond(url: string, signal = new AbortController().signal) {
   await responded.promise
 
   const session = await upgraded.promise
+
+  await pairing.delete()
+  await pairing.close()
 
   session.addEventListener("request", event => event.respondWith(onrequest(event.data)), { signal: session.closing })
   session.addEventListener("close", () => console.log("Session closed"), { signal: session.closing })
